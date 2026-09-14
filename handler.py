@@ -234,29 +234,39 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
-def split_sentences_natural(text: str, max_chars: int = 140) -> List[str]:
+def split_sentences_natural(text: str, max_chars: int = 110) -> List[str]:
     """
-    Splits text strictly by sentence boundaries (.!? or newlines), preserving full natural cadence.
-    Only splits by commas/clauses if a single sentence exceeds max_chars.
+    Splits text strictly by sentence boundaries (.!? or newlines \n).
+    If any block > max_chars, splits by clauses (, ; :).
+    If still > max_chars (e.g. unpunctuated wall of text), splits by words!
+    Guarantees no single chunk ever exceeds max_chars.
     """
-    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', text) if s.strip()]
-    if not raw_sentences:
-        raw_sentences = [text.strip()]
+    raw_blocks = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', text) if s.strip()]
+    if not raw_blocks:
+        raw_blocks = [text.strip()]
 
     chunks = []
-    for s in raw_sentences:
-        if len(s) <= max_chars:
-            chunks.append(s)
-        else:
-            parts = [p.strip() for p in re.split(r'(?<=[,;:])\s+', s) if p.strip()]
+    for block in raw_blocks:
+        if len(block) <= max_chars:
+            chunks.append(block)
+            continue
+
+        clauses = [c.strip() for c in re.split(r'(?<=[,;:])\s+', block) if c.strip()]
+        for clause in clauses:
+            if len(clause) <= max_chars:
+                chunks.append(clause)
+                continue
+
+            # Fail-safe word splitting for long clauses without punctuation
+            words = clause.split()
             current = ""
-            for p in parts:
-                if len(current) + len(p) + 1 <= max_chars:
-                    current = f"{current} {p}".strip()
+            for w in words:
+                if len(current) + len(w) + 1 <= max_chars:
+                    current = f"{current} {w}".strip()
                 else:
                     if current:
                         chunks.append(current)
-                    current = p
+                    current = w
             if current:
                 chunks.append(current)
 

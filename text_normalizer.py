@@ -195,20 +195,22 @@ def normalize_uzbek_characters(text: str) -> str:
     return text
 
 def clean_punctuation_and_whitespace(text: str) -> str:
-    """Ortiqcha simvollar, probellar va tinish belgilarini tozalash."""
-    # HACK FIX: Whisper timestamp formatida `▁` aslida bo'sh joy (probel) bo'lib xizmat qiladi,
-    # va oddiy bo'sh joylar ` ` esa bitta so'z ichidagi harflarni bo'lib yozish uchun ishlatilgan.
+    """Ortiqcha simvollar, probellar va tinish belgilarini tozalash (yangi qatorlar saqlanadi)."""
+    # HACK FIX: Whisper timestamp formatida `▁` aslida bo'sh joy (probel) bo'lib xizmat qiladi
     if '▁' in text:
         text = text.replace(' ', '')
         text = text.replace('▁', ' ')
     
     # Nuqtali vergul (;) va ikki nuqta (:) ni clause chegarasi sifatida saqlash
     text = text.replace(';', ',')
-    text = re.sub(r'[\t\r\n]+', ' ', text)
-    # Defis va chiziqchalarni probelga almashtirish (so'zlar birikib ketib noaniq talaffuz bo'lmasligi uchun)
+    text = re.sub(r'[\t\r]+', ' ', text)
+    text = re.sub(r'\n+', '\n', text)
+    # Defis va chiziqchalarni probelga almashtirish
     text = re.sub(r'[-–—_]+', ' ', text)
     text = re.sub(r'[^\w\s\.\,\!\?\:\'\"]', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Satrlar ichidagi probellarni tozalash, lekin yangi qatorlarni saqlash
+    lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in text.split('\n')]
+    text = '\n'.join(l for l in lines if l).strip()
     return text
 
 _FONETIK_PAIRS_CACHE = None
