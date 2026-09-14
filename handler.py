@@ -120,7 +120,7 @@ modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="
 storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
-melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v3_clean.wav", fallback="clean_ref_classic_baritone.wav")
+melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v4_expressive.wav", fallback="clean_ref_classic_baritone.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -128,36 +128,48 @@ VOICE_PROFILES = {
         "ref_text": "asosiy qismlari yaponiyada ishlab chiqarilgan elektronikasi janubiy koreyada tayyorlangan.",
         "mel_len": classic_len,
         "speed_factor": 1.0,
+        "pause_ms": 0.24,
+        "cfg_strength": 1.55,
     },
     "modern": {
         "audio": modern_audio,
         "ref_text": "transport orqali yevropada yevropa portiga u yerdan temir yo'l.",
         "mel_len": modern_len,
         "speed_factor": 1.02,
+        "pause_ms": 0.20,
+        "cfg_strength": 1.55,
     },
     "storyteller": {
         "audio": storyteller_audio,
         "ref_text": "tasavvur qiling.",
         "mel_len": storyteller_len,
-        "speed_factor": 0.98,
+        "speed_factor": 0.96,
+        "pause_ms": 0.34,
+        "cfg_strength": 1.50,
     },
     "inquisitive": {
         "audio": inquisitive_audio,
         "ref_text": "bu savol amaliyotda juda qiziqtiradi.",
         "mel_len": inquisitive_len,
         "speed_factor": 1.02,
+        "pause_ms": 0.22,
+        "cfg_strength": 1.60,
     },
     "cheerful": {
         "audio": cheerful_audio,
         "ref_text": "tashqi iqtisodiy faoliyatda qonuniy raqobatni ta'minlaydi.",
         "mel_len": cheerful_len,
-        "speed_factor": 1.04,
+        "speed_factor": 1.05,
+        "pause_ms": 0.18,
+        "cfg_strength": 1.70,
     },
     "melancholic": {
         "audio": melancholic_audio,
-        "ref_text": "bojxona organlari munosabatlarini to'g'ri tashkil etishga yordam beradi.",
+        "ref_text": "yangilangan konvensiya to'qson to'qqizinchi yilda qabul qilingan.",
         "mel_len": melancholic_len,
-        "speed_factor": 0.94,
+        "speed_factor": 0.86,
+        "pause_ms": 0.44,
+        "cfg_strength": 1.42,
     }
 }
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
@@ -333,32 +345,89 @@ def split_sentences_natural(text: str, max_chars: int = 100, word_max_chars: int
 
     return chunks
 
-def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
+def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -> np.ndarray:
     """
-    Studio DSP Master (100% Exact to generate_perfect_140k_local.py benchmark):
-    1. 150 Hz Low-Shelf (+1.8 dB baritone warmth and body)
-    2. 70 Hz Butterworth HPF (clean cut of sub-bass rumble)
-    3. 9500 Hz Butterworth LP cut (removes vocoder digital hiss beyond vocal range)
-    4. True Peak Normalization (-1 dB / 0.89)
+    Expressive Style Master Filter Engine
+    Applies tailored acoustic, spectral, resonance, and energy shaping per style.
     """
-    # 1. Low shelf warmth (+1.8 dB)
-    gain = 10 ** (1.8 / 20.0)
-    sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
-    low_band = signal.sosfiltfilt(sos_low, wave)
-    out = wave + (gain - 1.0) * low_band
+    out = wave.copy().astype(np.float32)
 
-    # 2. Sub-bass HPF cut (70 Hz)
-    sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
-    out = signal.sosfiltfilt(sos_hp, out)
+    if voice in ["melancholic", "gamgin", "mayus", "dramatic"]:
+        # 1. Darker resonance: gentle Butterworth low-pass rolloff at 5200 Hz
+        sos_lp = signal.butter(2, 5200, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
 
-    # 3. High-cut LP filter (9500 Hz) — cleans high-frequency vocoder hiss
-    sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
-    out = signal.sosfiltfilt(sos_lp, out)
+        # 2. Chest sorrow warmth: +2.2 dB at 200 Hz
+        gain = 10 ** (2.2 / 20.0)
+        sos_warm = signal.butter(2, 200, 'lp', fs=sr, output='sos')
+        low_band = signal.sosfiltfilt(sos_warm, out)
+        out = out + (gain - 1.0) * low_band
 
-    # 4. Peak Limiter (-1 dB / 0.89)
-    peak = np.max(np.abs(out))
-    if peak > 1e-5:
-        out = out * (0.89 / peak)
+        # 3. Sub-bass rumble cut: 65 Hz HPF
+        sos_hp = signal.butter(2, 65, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 4. Low energy (intimate, subdued sorrow): Peak limited to 0.70 (-3.1 dBFS)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.70 / peak)
+
+    elif voice in ["cheerful", "quvnoq", "shodiyona"]:
+        # 1. Bright smiling presence: +1.8 dB at 3200 Hz
+        gain = 10 ** (1.8 / 20.0)
+        sos_high = signal.butter(2, 3200, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_high, out)
+        out = out + (gain - 1.0) * high_band
+
+        # 2. Open air cut at 10500 Hz
+        sos_lp = signal.butter(2, 10500, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        # 3. Sub-bass cut 90 Hz
+        sos_hp = signal.butter(2, 90, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 4. High energy peak: 0.92
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.92 / peak)
+
+    elif voice == "storyteller":
+        # 1. Soft warm resonance: +2.0 dB at 180 Hz
+        gain = 10 ** (2.0 / 20.0)
+        sos_warm = signal.butter(2, 180, 'lp', fs=sr, output='sos')
+        low_band = signal.sosfiltfilt(sos_warm, out)
+        out = out + (gain - 1.0) * low_band
+
+        # 2. Soft highs (8000 Hz)
+        sos_lp = signal.butter(2, 8000, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        # 3. Sub-bass cut 75 Hz
+        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 4. Medium-low energy peak: 0.82
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.82 / peak)
+
+    else:
+        # Classic / Modern / Inquisitive standard broadcast DSP
+        gain = 10 ** (1.8 / 20.0)
+        sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
+        low_band = signal.sosfiltfilt(sos_low, out)
+        out = out + (gain - 1.0) * low_band
+
+        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.89 / peak)
 
     return out.astype(np.float32)
 
@@ -390,6 +459,8 @@ def handler(job: dict) -> dict:
     ref_audio = profile["audio"]
     ref_mel_len = profile["mel_len"]
     effective_speed = speed * profile.get("speed_factor", 1.0)
+    effective_cfg = float(job_input.get("cfg_strength", profile.get("cfg_strength", 1.55)))
+    pause_ms = float(job_input.get("pause_duration", profile.get("pause_ms", 0.24)))
     
     r_text = clean_text_strictly_for_vocab(profile["ref_text"], vocab_char_map)
 
@@ -433,7 +504,7 @@ def handler(job: dict) -> dict:
                 text=full_text,
                 duration=duration,
                 steps=steps,
-                cfg_strength=1.55,
+                cfg_strength=effective_cfg,
                 sway_sampling_coef=-1.0,
                 seed=seed if seed is not None else (200 + idx)
             )
@@ -452,8 +523,7 @@ def handler(job: dict) -> dict:
             )
             generated_waves.append(chunk_clean)
 
-    # 5. Natural human breath pause between sentences (320ms for storyteller, 240ms standard)
-    pause_ms = 0.32 if voice == "storyteller" else 0.24
+    # 5. Natural human breath pause between sentences shaped per style
     pause_samples = int(pause_ms * target_sample_rate)
     final_pieces = []
     for idx, c in enumerate(generated_waves):
@@ -463,8 +533,8 @@ def handler(job: dict) -> dict:
 
     full_audio = np.concatenate(final_pieces)
 
-    # 6. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
-    full_audio = apply_studio_master_dsp(full_audio, sr=target_sample_rate)
+    # 6. Apply Style Master DSP (energy, resonance, warmth, spectral contour per style)
+    full_audio = apply_style_dsp(full_audio, voice=voice, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
     # 7. Encode to MP3 or WAV
