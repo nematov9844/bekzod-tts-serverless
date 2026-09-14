@@ -68,8 +68,7 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
 
     for w_idx, word in enumerate(words):
         is_last_word = (w_idx == len(words) - 1)
-        has_clause_break = any(p in word for p in [',', ';', ':'])
-        has_sentence_break = any(p in word for p in ['.', '!', '?'])
+        has_clause_break = any(p in word for p in [',', ';', ':']) or (not is_last_word and any(p in word for p in ['.', '!', '?']))
         word_clean = re.sub(r"[^a-z']", "", word)
         
         # Harflar bo'yicha hisoblash
@@ -87,12 +86,12 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                     continue
                     
             ch = word_clean[i]
-            # O'zbek orfoepiyasida unlilar reduksiyasi:
-            # "i" urg'usiz pozitsiyada (masalan: qa-lin, bi-lim, ti-zim, -dagi) 45ms!
+            # O'zbek orfoepiyasida qisqa unlilar reduksiyasi:
+            # "i" urg'usiz pozitsiyada (masalan: qa-lin, bi-lim, ti-zim, -dagi) 42ms!
             if ch == 'i':
-                dur = 60 if i == 0 else 45
+                dur = 55 if i == 0 else 42
             elif ch == 'u':
-                dur = 75 if i == 0 else 60
+                dur = 70 if i == 0 else 55
             elif ch in ['a', 'o', 'e']:
                 dur = 110
             elif ch == "o'":
@@ -115,9 +114,9 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
             
         total_ms += word_ms
         
-        # Vergul yoki gap o'rtasidagi to'xtam
+        # Vergul yoki gap o'rtasidagi to'xtam (ichki tinish belgilari)
         if has_clause_break:
-            total_ms += 110 # Vergul uchun mikro-pauza
+            total_ms += 110 # Vergul/klauza uchun tabiiy mikro-pauza
         elif not is_last_word:
             total_ms += PHONEME_DURATIONS_MS[' ']
             # Undoshlar to'qnashuvi tekshiruvi (masalan: tashla[b] [q]o'y)

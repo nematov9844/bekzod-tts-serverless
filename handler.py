@@ -29,6 +29,7 @@ from f5_tts.infer.utils_infer import load_vocoder, target_sample_rate, hop_lengt
 # Local modules
 from text_normalizer import normalize_uzbek_text
 from phonetic_engine import calculate_phonetic_duration
+from audio_stitcher import clean_speech_bounds
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. INITIALIZATION & ASSET LOADING (RUNS ONCE ON WORKER COLD START)
@@ -40,6 +41,19 @@ REPO_ID = os.environ.get("HF_REPO_ID", "lynx9844/f5tts-bekzod-200k-uzbek")
 HF_TOKEN = os.environ.get("HF_TOKEN", None)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
+
+# Initialize DeepFilterNet 3 for AI Studio Master pass
+try:
+    from df.enhance import enhance, init_df
+    print("[*] Initializing DeepFilterNet 3 for studio AI noise elimination...")
+    model_df, df_state, _ = init_df()
+    df_sr = df_state.sr()
+    HAS_DEEPFILTER = True
+    print("[+] DeepFilterNet 3 initialized successfully.")
+except Exception as _df_err:
+    print(f"[!] DeepFilterNet 3 not available ({_df_err}), using studio DSP filter.")
+    HAS_DEEPFILTER = False
+    model_df, df_state, df_sr = None, None, 24000
 
 def get_file(filename: str) -> str:
     local_p = os.path.join(MODEL_DIR, filename)
@@ -178,6 +192,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'[!?]', '.', norm_text)
     norm_text = re.sub(r'\.+', '.', norm_text)
     norm_text = norm_text.replace('"', '').replace('(', '').replace(')', '')
+    norm_text = norm_text.replace("w", "v")
     
     # Filter for vocab
     valid_chars = [c for c in norm_text if c in vocab_char_map]
@@ -185,12 +200,12 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
-def split_sentences_natural(text: str, max_chars: int = 240) -> List[str]:
+def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
     """
-    Splits text strictly by sentence boundaries (.!?), preserving full natural cadence.
-    Only splits by commas if a single sentence exceeds max_chars.
+    Splits text strictly by sentence boundaries (.!? or newlines), preserving full natural cadence.
+    Only splits by commas/clauses if a single sentence exceeds max_chars.
     """
-    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', text) if s.strip()]
     if not raw_sentences:
         raw_sentences = [text.strip()]
 
@@ -321,15 +336,17 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            # Smooth 15ms zero-crossing fade at sentence ending
-            chunk_wave = wave_chunk.astype(np.float32)
-            if len(chunk_wave) > fade:
-                chunk_wave[-fade:] *= np.linspace(1.0, 0.0, fade)
+            # Clean vocoder onset latency and trailing vocoder air
+            chunk_clean = clean_speech_bounds(
+                wave_chunk.astype(np.float32),
+                sr=target_sample_rate,
+                pad_lead_ms=45,
+                pad_tail_ms=160
+            )
+            generated_waves.append(chunk_clean)
 
-            generated_waves.append(chunk_wave)
-
-    # 5. Natural 220ms pure silence pauses between sentences (100% black silence)
-    pause_samples = int(0.22 * target_sample_rate)
+    # 5. Natural 240ms human breath pause between sentences
+    pause_samples = int(0.24 * target_sample_rate)
     final_pieces = []
     for idx, c in enumerate(generated_waves):
         final_pieces.append(c)
@@ -338,7 +355,26 @@ def handler(job: dict) -> dict:
 
     full_audio = np.concatenate(final_pieces)
 
-    # 6. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
+    # 6. Apply DeepFilterNet 3 AI Studio Master Pass (if available)
+    if HAS_DEEPFILTER and model_df is not None:
+        try:
+            w_t = torch.from_numpy(full_audio).unsqueeze(0).float()
+            if target_sample_rate != df_sr:
+                w_df_in = torchaudio.transforms.Resample(target_sample_rate, df_sr)(w_t)
+            else:
+                w_df_in = w_t
+
+            with torch.no_grad():
+                w_df_out = enhance(model_df, df_state, w_df_in)
+
+            if df_sr != target_sample_rate:
+                full_audio = torchaudio.transforms.Resample(df_sr, target_sample_rate)(w_df_out).squeeze().cpu().numpy()
+            else:
+                full_audio = w_df_out.squeeze().cpu().numpy()
+        except Exception as e:
+            print(f"[!] DeepFilterNet enhancement error: {e}")
+
+    # 7. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
     full_audio = apply_studio_master_dsp(full_audio, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
