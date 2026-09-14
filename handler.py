@@ -135,13 +135,13 @@ VOICE_PROFILES = {
     },
     "storyteller": {
         "audio": storyteller_audio,
-        "ref_text": "tasavvur qiling bojxona mahsulotining qiymati har bir davlatda turlicha hisoblansa.",
+        "ref_text": "tasavvur qiling bojxona mahsulotining qiymati.",
         "mel_len": storyteller_len,
         "speed_factor": 0.88,
     },
     "inquisitive": {
         "audio": inquisitive_audio,
-        "ref_text": "bu savol amaliyotda juda qiziqtiradi agar tovar mening mulkim bo'lsa nega men uni istagan paytda ololmayman.",
+        "ref_text": "bu savol amaliyotda juda qiziqtiradi.",
         "mel_len": inquisitive_len,
         "speed_factor": 1.05,
     }
@@ -404,11 +404,11 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            # Clean vocoder onset latency and trailing vocoder air (50ms lead preserves initial plosives B, P)
+            # Clean vocoder onset latency and trailing vocoder air (70ms lead preserves initial plosives B, P)
             chunk_clean = clean_speech_bounds(
                 wave_chunk.astype(np.float32),
                 sr=target_sample_rate,
-                pad_lead_ms=50,
+                pad_lead_ms=70,
                 pad_tail_ms=160
             )
             generated_waves.append(chunk_clean)

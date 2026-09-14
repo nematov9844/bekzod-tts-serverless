@@ -27,10 +27,10 @@ import scipy.signal as signal
 SR = 24000
 sos_hp = signal.butter(4, 65, 'hp', fs=SR, output='sos')
 
-def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 50, pad_tail_ms: int = 140) -> np.ndarray:
+def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 70, pad_tail_ms: int = 150) -> np.ndarray:
     """
     Cleans vocoder onset latency and trailing vocoder air from an F5-TTS chunk.
-    Preserves all delicate consonants and release decay without any chopping.
+    Preserves all delicate consonants (b, p, t, d, q, m) and release decay without any chopping.
     """
     if len(wave) < int(0.08 * sr):
         return wave
@@ -48,7 +48,7 @@ def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 50
     
     # Estimate ambient noise floor (protect delicate tail suffixes while eliminating room hiss)
     noise_floor = np.percentile(rms, 15)
-    thresh = max(0.0035, noise_floor * 1.25)
+    thresh = max(0.002, noise_floor * 1.15)
 
     active = np.where(rms > thresh)[0]
     if len(active) == 0:
@@ -59,8 +59,8 @@ def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 50
 
     trimmed = wave[lead_sample:tail_sample].copy()
 
-    # 15ms cosine crossfade at head and tail eliminates any click, pop or trailing buzz
-    fade = int(0.015 * sr)
+    # 5ms cosine micro-fade at head and tail eliminates any DC pop without softening consonant transients
+    fade = int(0.005 * sr)
     if len(trimmed) > 2 * fade and fade > 0:
         t = np.linspace(0, np.pi / 2, fade).astype(np.float32)
         trimmed[:fade] *= np.sin(t)
