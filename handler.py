@@ -168,6 +168,9 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'\bshoir', 'shoiir', norm_text)
     norm_text = re.sub(r'\brais\b', 'raiis', norm_text)
 
+    # Orphoepic reduction of unstressed 'i' (qalin -> qaln)
+    norm_text = re.sub(r'\bqalin([a-z\']*)', r'qaln\1', norm_text)
+
     # Dashes to spaces
     norm_text = re.sub(r'[-–—_]+', ' ', norm_text)
 
