@@ -51,21 +51,25 @@ TERMINAL_SUFFIXES = [
 
 def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, speed_factor: float = 1.0) -> float:
     """
-    Berilgan o'zbekcha matn uchun ilmiy-fonetik davomiylikni (soniyalarda) hisoblaydi.
+    Berilgan o'zbekcha matn uchun ilmiy-fonetik davomiylikni (soniyalarda) hisoblaydi:
+    - Qisqa unlilar ('i', 'u') uchun urg'usiz bo'g'inlarda tabiiy reduksiya (45-50ms)
+    - Vergul, nuqta va undovlar uchun to'g'ri pauza buferi
+    - Qisqa so'zlar ("qalin", "ha") cho'zilib ketmasligi uchun minimal chegara 0.45s
     """
     clean_t = text.lower()
     clean_t = unicodedata.normalize("NFC", clean_t)
     clean_t = re.sub(r"[`'ʻʼʽ՚’‘]", "'", clean_t)
     
-    # 1. So'zlar va bo'g'inlarni tahlil qilish
     words = clean_t.split()
     if not words:
-        return 2.0
+        return 1.0
 
     total_ms = 0.0
 
     for w_idx, word in enumerate(words):
         is_last_word = (w_idx == len(words) - 1)
+        has_clause_break = any(p in word for p in [',', ';', ':'])
+        has_sentence_break = any(p in word for p in ['.', '!', '?'])
         word_clean = re.sub(r"[^a-z']", "", word)
         
         # Harflar bo'yicha hisoblash
@@ -83,31 +87,38 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                     continue
                     
             ch = word_clean[i]
-            dur = PHONEME_DURATIONS_MS.get(ch, 80)
+            # O'zbek orfoepiyasida unlilar reduksiyasi:
+            # "i" urg'usiz pozitsiyada (masalan: qa-lin, bi-lim, ti-zim, -dagi) 45ms!
+            if ch == 'i':
+                dur = 60 if i == 0 else 45
+            elif ch == 'u':
+                dur = 75 if i == 0 else 60
+            elif ch in ['a', 'o', 'e']:
+                dur = 110
+            elif ch == "o'":
+                dur = 130
+            elif ch in ['p', 't', 'k', 'q', 'b', 'd', 'g']:
+                dur = 65
+            else:
+                dur = PHONEME_DURATIONS_MS.get(ch, 75)
             
             # Qo'sh undosh (Geminate: mm, tt, bb, dd, ll, ss, kk)
             if i + 1 < w_len and word_clean[i+1] == ch and ch not in "aoeiu":
-                dur += 45  # Geminate occlusion hold
+                dur += 40  # Geminate hold
                 
             # Qo'sh unli (Hiatus: ua, oa, oi, aa, ii, io)
             if i + 1 < w_len and ch in "aoeiu" and word_clean[i+1] in "aoeiu":
-                dur += 45  # Hiatus vocal tract reconfiguration
+                dur += 40  # Hiatus transition
                 
             word_ms += dur
             i += 1
             
-        # Agar bu so'z gapning oxirgi so'zi bo'lsa (Pre-pausal lengthening: +35% – +45%)
-        if is_last_word and is_terminal_sentence:
-            # Oxirgi bo'g'in yutilishining oldini olish uchun
-            word_ms *= 1.40
-            # Agar maxsus suffikslardan biri bo'lsa (-di, -ti, -bdi)
-            if any(word_clean.endswith(sfx) for sfx in ["di", "ti", "bdi", "gan", "qoy", "qo'y"]):
-                word_ms += 120 # Qo'shimcha rezonans va so'nish buferi
-                
         total_ms += word_ms
         
-        # So'zlar orasidagi tabiiy masofa
-        if not is_last_word:
+        # Vergul yoki gap o'rtasidagi to'xtam
+        if has_clause_break:
+            total_ms += 110 # Vergul uchun mikro-pauza
+        elif not is_last_word:
             total_ms += PHONEME_DURATIONS_MS[' ']
             # Undoshlar to'qnashuvi tekshiruvi (masalan: tashla[b] [q]o'y)
             next_word = words[w_idx + 1] if w_idx + 1 < len(words) else ""
@@ -115,14 +126,14 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                 last_ch = word_clean[-1]
                 first_ch = next_word[0]
                 if last_ch in "ptkqbdg" and first_ch in "ptkqbdg":
-                    total_ms += 45 # Coarticulation mikro-pauzasi
+                    total_ms += 35 # Coarticulation mikro-pauzasi
                     
-    # Gap oxiridagi vokal so'nish vaqti (100% benchmark o'lchami: 160ms)
-    total_ms += 160 if is_terminal_sentence else 100
+    # Gap oxiridagi silliq vokal so'nish vaqti
+    total_ms += 140 if is_terminal_sentence else 80
 
     # Tezlik koeffitsiyenti (1.0 = normal, >1.0 = tezroq)
     total_sec = (total_ms / 1000.0) / max(0.5, speed_factor)
-    return max(1.8, total_sec)
+    return max(0.45, total_sec)
 
 def safe_render_wave(raw_wave: np.ndarray, sr: int = 24000, pad_tail_ms: int = 250, is_terminal: bool = True) -> np.ndarray:
     """

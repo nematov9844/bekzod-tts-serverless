@@ -173,8 +173,11 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = unicodedata.normalize('NFC', norm_text)
     norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
     
-    # Replace non-vocab punctuation
-    norm_text = norm_text.replace("!", ".").replace("?", ".").replace(":", ".").replace(";", ".").replace('"', '').replace('(', '').replace(')', '')
+    # Replace non-vocab punctuation: commas, colons, semicolons become '.' for in-sentence breath pauses
+    norm_text = re.sub(r'[,;:]', '.', norm_text)
+    norm_text = re.sub(r'[!?]', '.', norm_text)
+    norm_text = re.sub(r'\.+', '.', norm_text)
+    norm_text = norm_text.replace('"', '').replace('(', '').replace(')', '')
     
     # Filter for vocab
     valid_chars = [c for c in norm_text if c in vocab_char_map]
@@ -182,7 +185,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
-def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
+def split_sentences_natural(text: str, max_chars: int = 240) -> List[str]:
     """
     Splits text strictly by sentence boundaries (.!?), preserving full natural cadence.
     Only splits by commas if a single sentence exceeds max_chars.
@@ -276,11 +279,19 @@ def handler(job: dict) -> dict:
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
 
-    # 2. Strict Uzbek Vocabulary Filtering
-    clean_full_text = clean_text_strictly_for_vocab(norm_text, vocab_char_map)
+    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses)
+    raw_sentences = split_sentences_natural(norm_text, max_chars=240)
+    if not raw_sentences:
+        return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
-    # 3. Sentence Splitting (respects sentence flow, avoids unnatural midway breaks)
-    text_chunks = split_sentences_natural(clean_full_text, max_chars=240)
+    # 3. Clean each sentence strictly for vocab characters while turning commas into internal in-breath pauses '.'
+    text_chunks = []
+    for s in raw_sentences:
+        c = clean_text_strictly_for_vocab(s, vocab_char_map)
+        c = c.strip().strip('.').strip()
+        if c:
+            text_chunks.append(c)
+
     if not text_chunks:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
