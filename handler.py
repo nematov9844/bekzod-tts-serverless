@@ -120,7 +120,7 @@ modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="
 storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
-melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v2_clean.wav", fallback="clean_ref_classic_baritone.wav")
+melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v3_clean.wav", fallback="clean_ref_classic_baritone.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -155,9 +155,9 @@ VOICE_PROFILES = {
     },
     "melancholic": {
         "audio": melancholic_audio,
-        "ref_text": "yangilangan konvensiya to'qson to'qqizinchi yilda qabul qilingan.",
+        "ref_text": "bojxona organlari munosabatlarini to'g'ri tashkil etishga yordam beradi.",
         "mel_len": melancholic_len,
-        "speed_factor": 0.92,
+        "speed_factor": 0.94,
     }
 }
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
