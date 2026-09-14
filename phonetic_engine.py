@@ -87,11 +87,11 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                     
             ch = word_clean[i]
             # O'zbek orfoepiyasida qisqa unlilar reduksiyasi:
-            # "i" urg'usiz pozitsiyada (masalan: qa-lin, bi-lim, ti-zim, -dagi) 42ms!
+            # "i" urg'usiz pozitsiyada (masalan: qa-lin, bi-lim, ti-zim, -dagi) 38ms!
             if ch == 'i':
-                dur = 55 if i == 0 else 42
+                dur = 50 if i == 0 else 38
             elif ch == 'u':
-                dur = 70 if i == 0 else 55
+                dur = 65 if i == 0 else 50
             elif ch in ['a', 'o', 'e']:
                 dur = 110
             elif ch == "o'":

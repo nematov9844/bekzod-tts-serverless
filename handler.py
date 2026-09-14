@@ -170,13 +170,8 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'\brais\b', 'raiis', norm_text)
     norm_text = re.sub(r'\bfoiz\b', 'foiiz', norm_text)
 
-    # Orphoepic reduction of unstressed 'i' with terminal nasal resonance/stress:
-    # "qalin" root -> "qalnn" (urg'u oxirgi n ga o'tadi: qalN / qalnn)
-    norm_text = re.sub(r'\bqalin\b', 'qalnn', norm_text)
-    norm_text = re.sub(r'\bqaln\b', 'qalnn', norm_text)
-    norm_text = re.sub(r'\bqalin(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', norm_text)
-    norm_text = re.sub(r'\bqaln(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', norm_text)
-    norm_text = re.sub(r'\bqalin([a-z\']*)', r'qaln\1', norm_text)
+    # Raqamlar va yuzliklar ritmik birikishi (to'rtyuz, beshyuz, uchyuz)
+    norm_text = re.sub(r'\b(bir|ikki|uch|to\'rt|besh|olti|yetti|sakkiz|to\'qqiz)\s+yuz\b', r'\1yuz', norm_text)
 
     # Kontakt va progressiv/regressiv fonetik assimilatsiya (shamba, tussiz, kitopka)
     norm_text = re.sub(r'\bshanba\b', 'shamba', norm_text)
@@ -239,7 +234,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
-def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
+def split_sentences_natural(text: str, max_chars: int = 140) -> List[str]:
     """
     Splits text strictly by sentence boundaries (.!? or newlines), preserving full natural cadence.
     Only splits by commas/clauses if a single sentence exceeds max_chars.
@@ -335,8 +330,8 @@ def handler(job: dict) -> dict:
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
 
-    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses)
-    raw_sentences = split_sentences_natural(norm_text, max_chars=240)
+    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses, max 140 chars)
+    raw_sentences = split_sentences_natural(norm_text, max_chars=140)
     if not raw_sentences:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 

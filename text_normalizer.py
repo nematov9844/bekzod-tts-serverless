@@ -325,11 +325,8 @@ def apply_uzbek_orthoepy_and_dialect(text: str, style: str = "adabiy") -> str:
     text = re.sub(r'\brais\b', 'raiis', text, flags=re.IGNORECASE)
     text = re.sub(r'\bfoiz\b', 'foiiz', text, flags=re.IGNORECASE)
 
-    # 3. O'zbek orfoepiyasida oxirgi koda undoshiga urg'u berish va reduksiya
-    text = re.sub(r'\bqalin\b', 'qalnn', text, flags=re.IGNORECASE)
-    text = re.sub(r'\bqaln\b', 'qalnn', text, flags=re.IGNORECASE)
-    text = re.sub(r'\bqalin(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', text, flags=re.IGNORECASE)
-    text = re.sub(r'\bqaln(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', text, flags=re.IGNORECASE)
+    # 3. Raqamlar va yuzliklar ritmik birikishi (to'rtyuz, beshyuz, uchyuz)
+    text = re.sub(r'\b(bir|ikki|uch|to\'rt|besh|olti|yetti|sakkiz|to\'qqiz)\s+yuz\b', r'\1yuz', text, flags=re.IGNORECASE)
 
     # 4. Kontakt va progressiv/regressiv fonetik assimilatsiya (shamba, tussiz, kitopka)
     text = re.sub(r'\bshanba\b', 'shamba', text, flags=re.IGNORECASE)
