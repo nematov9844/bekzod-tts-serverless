@@ -373,7 +373,7 @@ def handler(job: dict) -> dict:
     if not raw_text:
         return {"error": "Matn kiritilmagan ('text' bo'sh)", "status": "FAILED"}
 
-    voice = job_input.get("voice", "classic").lower()
+    voice = (job_input.get("voice") or job_input.get("voice_style") or job_input.get("style_name") or "classic").lower()
     style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
     steps = int(job_input.get("steps", 32))
