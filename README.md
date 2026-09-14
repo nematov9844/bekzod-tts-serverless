@@ -1,210 +1,129 @@
-# bekzod-tts-serverless
+# Bekzod Voice 140k — RunPod Serverless TTS Engine
 
-Runpod Flash application with GPU and CPU workers on Runpod serverless infrastructure.
+Ushbu endpoint **RunPod Serverless** platformasida ishga tushirilgan bo'lib, **Pay-As-You-Go** (faqat so'rov vaqtida to'lov, ishlatilmaganda **$0.00**) rejimida ishlaydi.
 
-## Quick Start
+---
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended Python package manager):
+## 🚀 Endpoint Ma'lumotlari
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+- **Endpoint ID:** `brpr0c2l9ia4y8`
+- **GPU:** NVIDIA GeForce RTX 4090 (24GB VRAM)
+- **Min Workers:** `0` (Avtomatik 0 ga tushadi, bo'sh turganda xarajat 0)
+- **Max Workers:** `2`
+- **Idle Timeout:** `120s` (2 daqiqa harakatsizlikdan so'ng to'xtaydi)
+- **Sync URL (`/runsync`):** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/runsync`
+- **Async URL (`/run`):** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/run`
+- **Status URL:** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/status/<JOB_ID>`
+
+---
+
+## ⚡ Tezkorlik Ko'rsatkichlari
+
+| Rejim | Bajarilish vaqti | Izoh |
+|---|---|---|
+| **Warm Start (faol paytda)** | **0.8s – 2.0s** | Real-vaqtdan 4 barobar tezroq sintez |
+| **Cold Start (0 dan yoqilganda)** | **~25s** | Model va muhit yuklangandan so'ng navbatdagi so'rovlar warm bo'ladi |
+
+---
+
+## 📡 API So'rov Shakli
+
+### Headerlar
+```http
+Authorization: Bearer <RUNPOD_API_KEY>
+Content-Type: application/json
 ```
 
-Set up the project:
-
-```bash
-uv venv && source .venv/bin/activate
-uv sync
-flash login              # Authenticate with Runpod
-flash dev
+### Request Body
+```json
+{
+  "input": {
+    "text": "Assalomu alaykum, bu RunPod Serverless orqali generatsiya qilingan ovoz.",
+    "voice": "modern",
+    "speed": 1.0,
+    "format": "mp3"
+  }
+}
 ```
 
-Or with pip:
+### Parametrlar:
+- `text` *(string, majburiy)*: Generatsiya qilinadigan matn.
+- `voice` *(string, ixtiyoriy)*: `"modern"` (tiniq, dinamik) yoki `"classic"` (chuqur bariton). Default: `"modern"`.
+- `speed` *(float, ixtiyoriy)*: `0.8` dan `1.5` gacha. Default: `1.0`.
+- `format` *(string, ixtiyoriy)*: `"mp3"` yoki `"wav"`. Default: `"mp3"`.
 
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-flash login              # Authenticate with Runpod
-flash dev
+### Response Body (`/runsync`)
+```json
+{
+  "id": "sync-85492c99-ae53-43a6-aee8-2c405ea43f68-e1",
+  "status": "COMPLETED",
+  "executionTime": 893,
+  "delayTime": 129,
+  "output": {
+    "status": "COMPLETED",
+    "audio_base64": "SUQzBAAAAAAA...",
+    "duration": 6.04,
+    "format": "mp3",
+    "voice": "modern",
+    "sample_rate": 24000
+  }
+}
 ```
 
-Server starts at **http://localhost:8888**. Visit **http://localhost:8888/docs** for interactive Swagger UI.
+---
 
-Use `flash dev --auto-provision` to pre-deploy all endpoints on startup, eliminating cold-start delays on first request. Provisioned endpoints are cached and reused across restarts.
+## 💻 Frontend Integratsiya Misollari
 
-When you stop the server with Ctrl+C, all endpoints provisioned during the session are automatically cleaned up.
+### 1. JavaScript / React / Vue (`fetch`)
 
-## Test the API
+```javascript
+async function synthesizeVoice(text, voice = "modern") {
+  const RUNPOD_API_KEY = "rpa_..."; // RunPod API Key
+  const ENDPOINT_ID = "brpr0c2l9ia4y8";
+
+  const response = await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/runsync`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${RUNPOD_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      input: {
+        text: text,
+        voice: voice,
+        speed: 1.0,
+        format: "mp3"
+      }
+    })
+  });
+
+  const data = await response.json();
+
+  if (data.status === "COMPLETED" && data.output?.audio_base64) {
+    // Brauzerda darhol ijro etish
+    const audio = new Audio(`data:audio/mp3;base64,${data.output.audio_base64}`);
+    audio.play();
+    return data.output;
+  } else {
+    throw new Error(data.error || "Generatsiyada xatolik");
+  }
+}
+```
+
+### 2. cURL orqali sinash
 
 ```bash
-# Queue-based GPU worker
-curl -X POST http://localhost:8888/gpu_worker/runsync \
+curl -X POST "https://api.runpod.ai/v2/brpr0c2l9ia4y8/runsync" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"input": {"input_data": {"message": "Hello GPU!"}}}'
-
-# Queue-based CPU worker
-curl -X POST http://localhost:8888/cpu_worker/runsync \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"input_data": {"message": "Hello CPU!"}}}'
-
-# Load-balanced HTTP endpoint
-curl -X POST http://localhost:8888/lb_worker/process \
-  -H "Content-Type: application/json" \
-  -d '{"input_data": {"message": "Hello from LB!"}}'
-
-# Load-balanced health check
-curl http://localhost:8888/lb_worker/health
+  -d '{
+    "input": {
+      "text": "Salom! Bu sinov xabari.",
+      "voice": "modern",
+      "format": "mp3"
+    }
+  }'
 ```
 
-## Project Structure
-
-```
-bekzod-tts-serverless/
-├── gpu_worker.py      # GPU serverless worker (queue-based)
-├── cpu_worker.py      # CPU serverless worker (queue-based)
-├── lb_worker.py       # CPU load-balanced HTTP endpoint
-├── .env.example       # Environment variable template
-├── requirements.txt   # Python dependencies
-└── README.md
-```
-
-## Worker Types
-
-### Queue-Based (QB) Workers
-
-QB workers process jobs from a queue. Each call to `/runsync` sends a job and waits
-for the result. Use QB for compute-heavy tasks that may take seconds to minutes.
-
-**gpu_worker.py** — GPU serverless function:
-
-```python
-from runpod_flash import Endpoint, GpuType
-
-@Endpoint(name="gpu_worker", gpu=GpuType.ANY, dependencies=["torch"])
-async def gpu_hello(input_data: dict) -> dict:
-    import torch
-    gpu_name = torch.cuda.get_device_name(0)
-    return {"message": gpu_name}
-```
-
-**cpu_worker.py** — CPU serverless function:
-
-```python
-from runpod_flash import Endpoint
-
-@Endpoint(name="cpu_worker", cpu="cpu3c-1-2")
-async def cpu_hello(input_data: dict) -> dict:
-    return {"message": "Hello from CPU!"}
-```
-
-### Load-Balanced (LB) Workers
-
-LB workers expose standard HTTP endpoints (GET, POST, etc.) behind a load balancer.
-Use LB for low-latency API endpoints that need horizontal scaling.
-
-**lb_worker.py** — HTTP endpoints on a load-balanced container:
-
-```python
-from runpod_flash import Endpoint
-
-api = Endpoint(name="lb_worker", cpu="cpu3c-1-2", workers=(1, 3))
-
-@api.post("/process")
-async def process(input_data: dict) -> dict:
-    return {"status": "success", "echo": input_data}
-
-@api.get("/health")
-async def health() -> dict:
-    return {"status": "healthy"}
-```
-
-### Client Mode
-
-Call an existing endpoint or a pre-built image without writing handler code:
-
-```python
-from runpod_flash import Endpoint
-
-# connect to an existing endpoint by id
-ep = Endpoint(id="ep-abc123")
-job = await ep.run({"prompt": "hello"})
-await job.wait()
-print(job.output)
-
-# deploy and call a pre-built image
-ep = Endpoint(name="vllm", image="runpod/worker-vllm:stable-cuda12.1.0")
-result = await ep.post("/v1/completions", {"prompt": "hello"})
-```
-
-## Adding New Workers
-
-Create a new `.py` file with an `Endpoint`. `flash dev` auto-discovers all
-`Endpoint` functions in the project.
-
-```python
-# my_worker.py
-from runpod_flash import Endpoint, GpuType
-
-@Endpoint(name="my_worker", gpu=GpuType.NVIDIA_GEFORCE_RTX_4090, dependencies=["transformers"])
-async def predict(input_data: dict) -> dict:
-    from transformers import pipeline
-    pipe = pipeline("sentiment-analysis")
-    return pipe(input_data["text"])[0]
-```
-
-Then run `flash dev` -- the new worker appears automatically.
-
-## GPU Types
-
-| Config                                    | Hardware          | VRAM   |
-| ----------------------------------------- | ----------------- | ------ |
-| `GpuType.ANY`                             | Any available GPU | varies |
-| `GpuType.NVIDIA_GEFORCE_RTX_4090`         | RTX 4090          | 24 GB  |
-| `GpuType.NVIDIA_GEFORCE_RTX_5090`         | RTX 5090          | 32 GB  |
-| `GpuType.NVIDIA_RTX_6000_ADA_GENERATION`  | RTX 6000 Ada      | 48 GB  |
-| `GpuType.NVIDIA_L4`                       | L4                | 24 GB  |
-| `GpuType.NVIDIA_A100_80GB_PCIe`           | A100 PCIe         | 80 GB  |
-| `GpuType.NVIDIA_A100_SXM4_80GB`           | A100 SXM4         | 80 GB  |
-| `GpuType.NVIDIA_H100_80GB_HBM3`           | H100              | 80 GB  |
-| `GpuType.NVIDIA_H200`                     | H200              | 141 GB |
-| `GpuType.NVIDIA_B200`                     | B200              | 180 GB |
-
-## CPU Types
-
-Pass a CPU instance type string to `cpu=`:
-- `"cpu3c-1-2"` -- 1 vCPU, 2 GB RAM
-- `"cpu3c-4-8"` -- 4 vCPU, 8 GB RAM
-- `"cpu3g-2-8"` -- 2 vCPU, 8 GB RAM
-- `"cpu5g-4-16"` -- 4 vCPU, 16 GB RAM
-
-Or use `CpuInstanceType` enum values.
-
-## Authentication
-
-Run `flash login` to authenticate via browser. This stores your API key in `~/.runpod/config.toml`.
-
-Alternatively, set the `RUNPOD_API_KEY` environment variable or add it to `.env`:
-```bash
-cp .env.example .env   # Then edit .env with your key
-```
-
-Get your API key from [Runpod Settings](https://www.runpod.io/console/user/settings).
-Learn more from our [Documentation](https://docs.runpod.io/get-started/api-keys).
-
-## Environment Variables
-
-```bash
-# Authentication (optional if using flash login)
-RUNPOD_API_KEY=your_api_key
-
-# Optional
-FLASH_HOST=localhost   # Server host (default: localhost)
-FLASH_PORT=8888        # Server port (default: 8888)
-LOG_LEVEL=INFO         # Logging level (default: INFO)
-```
-
-## Deploy
-
-```bash
-flash deploy
-```
+### 3. Tayyor HTML Demo
+Ushbu papkadagi [`client_example.html`](file:///home/arch/Project/bekzod-tts-serverless/client_example.html) faylini istalgan brauzerda ochib, to'g'ridan-to'g'ri sinab ko'rishingiz mumkin.
