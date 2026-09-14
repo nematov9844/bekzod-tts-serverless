@@ -1,15 +1,18 @@
 """
 handler.py — RunPod Serverless Worker for Bekzod Voice 140k F5-TTS
+100% 1-to-1 Server Benchmark Replica (Phonetic Engine + Text Normalizer + Audio Stitcher + Studio DSP)
 """
 
 import os
 import io
 import re
+import gc
 import base64
 import tempfile
 import subprocess
 import unicodedata
 from pathlib import Path
+from typing import Optional, List, Tuple
 
 import torch
 import torchaudio
@@ -23,13 +26,19 @@ import runpod
 from f5_tts.model import CFM, DiT
 from f5_tts.infer.utils_infer import load_vocoder, target_sample_rate, hop_length
 
+# Local modules
+from text_normalizer import normalize_uzbek_text
+from phonetic_engine import calculate_phonetic_duration
+from audio_stitcher import stitch_chunks_zero_defect
+
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. MODEL INITIALIZATION (RUNS ONCE ON COLD START)
+# 1. INITIALIZATION & ASSET LOADING (RUNS ONCE ON WORKER COLD START)
 # ─────────────────────────────────────────────────────────────────────────────
 
 print("[*] Initializing Bekzod TTS Engine on cold start...")
 
 REPO_ID = os.environ.get("HF_REPO_ID", "lynx9844/f5tts-bekzod-200k-uzbek")
+HF_TOKEN = os.environ.get("HF_TOKEN", None)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
 
@@ -37,9 +46,8 @@ def get_file(filename: str) -> str:
     local_p = os.path.join(MODEL_DIR, filename)
     if os.path.exists(local_p):
         return local_p
-    # Hugging Face fallback
     print(f"[*] Downloading {filename} from Hugging Face ({REPO_ID})...")
-    return hf_hub_download(repo_id=REPO_ID, filename=filename)
+    return hf_hub_download(repo_id=REPO_ID, filename=filename, token=HF_TOKEN)
 
 # 1. Vocab
 vocab_path = get_file("vocab.txt")
@@ -47,8 +55,9 @@ with open(vocab_path, "r", encoding="utf-8") as f:
     raw_vocab = [line.strip("\n") for line in f]
 valid_vocab = [l for i, l in enumerate(raw_vocab) if l != "" or i == 0]
 vocab_char_map = {l: i for i, l in enumerate(valid_vocab)}
+vocab_size = len(vocab_char_map)
 
-# 2. Model Checkpoint
+# 2. Checkpoint (model_140000.safetensors)
 ckpt_path = get_file("model_140000.safetensors")
 
 model = DiT(
@@ -56,7 +65,7 @@ model = DiT(
     depth=22,
     heads=16,
     ff_mult=2,
-    text_num_embeds=len(vocab_char_map),
+    text_num_embeds=vocab_size,
     text_dim=512,
     mel_dim=100,
     conv_layers=4,
@@ -81,8 +90,9 @@ if DEVICE == "cuda":
 else:
     cfm = cfm.to(DEVICE).eval()
 
-# 3. Vocoder
-vocoder = load_vocoder("vocos", device="cpu")
+# 3. Vocoder (Vocos)
+vocoder_device = "cpu" if DEVICE == "cuda" else DEVICE
+vocoder = load_vocoder("vocos", device=vocoder_device)
 
 # 4. Reference Anchors
 def load_anchor(filename: str):
@@ -94,89 +104,126 @@ def load_anchor(filename: str):
         a = torch.mean(a, dim=0, keepdim=True)
     if DEVICE == "cuda":
         a = a.half().to(DEVICE)
-    return a, a.shape[-1] // hop_length
+    mel_len = cfm.mel_spec(a).shape[-1] if hasattr(cfm, 'mel_spec') else a.shape[-1] // hop_length
+    return a, mel_len
 
 modern_audio, modern_len = load_anchor("ref_modern_active.wav")
 classic_audio, classic_len = load_anchor("ref_classic_baritone.wav")
 
-ENGINE = {
-    "cfm": cfm,
-    "vocoder": vocoder,
-    "vocab_char_map": vocab_char_map,
-    "device": DEVICE,
-    "modern_audio": modern_audio,
-    "modern_len": modern_len,
-    "modern_text": "transport orqali yevropada yevropa portiga u yerdan temir yo'l.",
-    "classic_audio": classic_audio,
-    "classic_len": classic_len,
-    "classic_text": "asosiy qismlari yaponiyada ishlab chiqarilgan elektronikasi janubiy koreyada tayyorlangan.",
+VOICE_PROFILES = {
+    "modern": {
+        "audio": modern_audio,
+        "ref_text": "transport orqali yevropada yevropa portiga u yerdan temir yo'l.",
+        "mel_len": modern_len,
+        "speed_factor": 1.05,
+    },
+    "classic": {
+        "audio": classic_audio,
+        "ref_text": "asosiy qismlari yaponiyada ishlab chiqarilgan elektronikasi janubiy koreyada tayyorlangan.",
+        "mel_len": classic_len,
+        "speed_factor": 0.98,
+    }
 }
 
 print(f"[✓] Bekzod TTS Engine initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. PHONETIC & DSP HELPERS
+# 2. EXACT 1-TO-1 TEXT PREPROCESSING & DSP
 # ─────────────────────────────────────────────────────────────────────────────
 
-PHONEME_DURATIONS_MS = {
-    'a': 110, 'o': 115, 'e': 105, 'i': 70, 'u': 75, "o'": 130,
-    's': 90, 'z': 85, 'sh': 100, 'ch': 95, 'x': 95, 'h': 90, 'f': 85,
-    'p': 60, 't': 60, 'k': 65, 'q': 70, 'b': 60, 'd': 60, 'g': 65,
-    'm': 80, 'n': 80, 'l': 75, 'r': 80, 'y': 75, 'v': 75, 'j': 80,
-    "'": 65, ' ': 50
-}
-VOWELS = set("aoeiu")
+def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = "adabiy", already_normalized: bool = False) -> str:
+    if not already_normalized:
+        norm_text = normalize_uzbek_text(text, style=style).lower()
+    else:
+        norm_text = text.lower()
+    
+    # Standalone English/tech abbreviations to pronunciation
+    norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
+    norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
+    norm_text = re.sub(r'\bit\b', 'ay ti', norm_text)
+    
+    # Phonetic fix for months, loanwords and numbers
+    norm_text = re.sub(r'\baudio', 'avdio', norm_text)
+    norm_text = re.sub(r'\bsentabr\b', 'sentiyabr', norm_text)
+    norm_text = re.sub(r'\bsentyabr\b', 'sentiyabr', norm_text)
+    norm_text = re.sub(r'\boktyabr\b', 'oktabr', norm_text)
+    norm_text = re.sub(r'\bob[- ]havo\b', 'obhavo', norm_text)
+    norm_text = re.sub(r'\bsoha', 'sohha', norm_text)
 
-def calc_duration(t: str, spd: float = 1.0) -> float:
-    clean_t = t.lower()
-    clean_t = unicodedata.normalize("NFC", clean_t)
-    clean_t = re.sub(r"[`'ʻʼʽ՚’‘]", "'", clean_t)
-    words = clean_t.split()
-    if not words:
-        return 2.0
-    total_ms = 0.0
-    for w_idx, word in enumerate(words):
-        is_last = (w_idx == len(words) - 1)
-        i = 0
-        w_len = len(word)
-        while i < w_len:
-            if i + 2 <= w_len and word[i:i+2] in ["o'", "g'", "sh", "ch"]:
-                dur = PHONEME_DURATIONS_MS.get(word[i:i+2], 95)
-                total_ms += dur
-                i += 2
-                continue
-            ch = word[i]
-            dur = PHONEME_DURATIONS_MS.get(ch, 75)
-            if i + 1 < w_len and word[i+1] == ch and ch not in VOWELS:
-                dur += 45
-            if i + 1 < w_len and ch in VOWELS and word[i+1] in VOWELS and word[i+1] != "'":
-                dur += 45
-            total_ms += dur
-            i += 1
-        total_ms += PHONEME_DURATIONS_MS[' ']
-        if is_last:
-            total_ms += 160.0
-    return max(2.0, (total_ms / 1000.0) / spd)
+    # Hiatus reinforcement
+    norm_text = re.sub(r'\boila', 'oiila', norm_text)
+    norm_text = re.sub(r'\bdoira', 'doiira', norm_text)
+    norm_text = re.sub(r'\bshoir', 'shoiir', norm_text)
+    norm_text = re.sub(r'\brais\b', 'raiis', norm_text)
 
-def clean_u(t: str) -> str:
-    t = unicodedata.normalize('NFC', t)
-    t = re.sub(r'[\u2018\u2019\u02BB\u02BC\`]', "'", t)
-    t = re.sub(r"[^a-z0-9\s.,!?\'\-]", ' ', t.lower())
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t
+    # Dashes to spaces
+    norm_text = re.sub(r'[-–—_]+', ' ', norm_text)
 
-def apply_dsp(wave: np.ndarray, prof: str) -> np.ndarray:
+    # Compound words breakdown
+    norm_text = re.sub(r'\bneyrotarmoq', 'neyro tarmoq', norm_text)
+    norm_text = re.sub(r'\bnanotexnolog', 'nano texnolog', norm_text)
+    norm_text = re.sub(r'\bbiotibbiyot', 'bio tibbiyot', norm_text)
+    norm_text = re.sub(r'\bkiberxavfsiz', 'kiber xavfsiz', norm_text)
+    norm_text = re.sub(r'\baudiokitob', 'avdio kitob', norm_text)
+    norm_text = re.sub(r'\bvideodars', 'video dars', norm_text)
+    norm_text = re.sub(r'\bvebsayt', 'veb sayt', norm_text)
+
+    # Number suffixes attachment
+    norm_text = re.sub(r'\b(bir|ikki|uch|to\'rt|besh|olti|yetti|sakkiz|to\'qqiz|o\'n|yigirma|o\'ttiz|qirq|ellik|oltmish|yetmish|sakson|sakkson|to\'qson|yuz|ming|million|milliyon|milliard)\s+(dan|ga|da|ni|ning)\b', r'\1\2', norm_text)
+
+    # Normalize apostrophes
+    norm_text = unicodedata.normalize('NFC', norm_text)
+    norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
+    
+    # Replace non-vocab punctuation
+    norm_text = norm_text.replace("!", ".").replace(":", ".").replace(";", ".").replace('"', '').replace('(', '').replace(')', '')
+    
+    # Filter for vocab
+    valid_chars = [c for c in norm_text if c in vocab_char_map]
+    cleaned = "".join(valid_chars)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+def split_clause_smart(sent: str, max_chars: int = 200) -> List[str]:
+    sent = sent.strip()
+    if len(sent) <= max_chars:
+        return [sent]
+    if re.search(r'[,;:]\s+', sent):
+        parts = [p.strip() for p in re.split(r'(?<=[,;:])\s+', sent) if p.strip()]
+        res = []
+        for p in parts:
+            res.extend(split_clause_smart(p, max_chars))
+        return res
+
+    words = sent.split()
+    mid = len(words) // 2
+    p1 = ' '.join(words[:mid]).rstrip(',') + ','
+    p2 = ' '.join(words[mid:])
+    res = []
+    res.extend(split_clause_smart(p1, max_chars))
+    res.extend(split_clause_smart(p2, max_chars))
+    return res
+
+def apply_studio_dsp(wave: np.ndarray, sr: int = 24000, profile: str = "modern") -> np.ndarray:
+    """
+    Server V2 Studio DSP:
+    - 70 Hz Butterworth HPF (sub-bass rumble and mic floor cut)
+    - Classic: 150 Hz Baritone Warmth (+1.8 dB low shelf)
+    - Modern: 8500 Hz Smooth High-cut (smooth high frequency polish)
+    - Peak normalization: -1 dB (0.89)
+    """
     out = wave.copy()
-    sos_hp = signal.butter(2, 70, 'hp', fs=target_sample_rate, output='sos')
+    sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
     out = signal.sosfiltfilt(sos_hp, out)
-    if prof == "classic":
+    if profile in ["classic", "bekzod"]:
         gain = 10 ** (1.8 / 20.0)
-        sos_low = signal.butter(2, 150, 'lp', fs=target_sample_rate, output='sos')
+        sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
         low_band = signal.sosfiltfilt(sos_low, out)
         out = out + (gain - 1.0) * low_band
     else:
-        sos_lp = signal.butter(2, 8500, 'lp', fs=target_sample_rate, output='sos')
+        sos_lp = signal.butter(2, 8500, 'lp', fs=sr, output='sos')
         out = signal.sosfiltfilt(sos_lp, out)
+        
     peak = np.max(np.abs(out))
     if peak > 1e-5:
         out = out * (0.89 / peak)
@@ -188,12 +235,14 @@ def apply_dsp(wave: np.ndarray, prof: str) -> np.ndarray:
 
 def handler(job: dict) -> dict:
     job_input = job.get("input", job)
-    text = job_input.get("text", "").strip()
-    if not text:
+    raw_text = job_input.get("text", "").strip()
+    if not raw_text:
         return {"error": "Matn kiritilmagan ('text' bo'sh)", "status": "FAILED"}
 
     voice = job_input.get("voice", "modern").lower()
+    style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
+    steps = int(job_input.get("steps", 32))
     fmt = job_input.get("format", "mp3").lower()
     seed = job_input.get("seed", 42)
 
@@ -203,66 +252,102 @@ def handler(job: dict) -> dict:
             torch.cuda.manual_seed(seed)
         np.random.seed(seed)
 
-    if voice == "classic":
-        ref_audio = ENGINE["classic_audio"]
-        ref_audio_len = ENGINE["classic_len"]
-        ref_clean = clean_u(ENGINE["classic_text"])
-        effective_speed = speed * 0.98
-    else:
-        ref_audio = ENGINE["modern_audio"]
-        ref_audio_len = ENGINE["modern_len"]
-        ref_clean = clean_u(ENGINE["modern_text"])
-        effective_speed = speed * 1.05
+    profile = VOICE_PROFILES.get(voice, VOICE_PROFILES["modern"])
+    ref_audio = profile["audio"]
+    ref_mel_len = profile["mel_len"]
+    effective_speed = speed * profile.get("speed_factor", 1.0)
+    
+    r_text = clean_text_strictly_for_vocab(profile["ref_text"], vocab_char_map)
 
-    raw_sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
-    sentences = []
-    for sent in raw_sents:
-        if len(sent) <= 200:
-            sentences.append(sent)
+    # 1. Full Uzbek text normalization (numbers, dates, abbreviations, orthoepy, dialect, tutuq)
+    norm_text = normalize_uzbek_text(raw_text, style=style).lower()
+    norm_text = re.sub(r'\baudio', 'avdio', norm_text)
+    norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
+    norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
+    norm_text = re.sub(r'\bit\b', 'ay ti', norm_text)
+    norm_text = re.sub(r'\bsentabr\b|\bsentyabr\b', 'sentiyabr', norm_text)
+    norm_text = re.sub(r'\boktyabr\b', 'oktabr', norm_text)
+    norm_text = re.sub(r'\bob[- ]havo\b', 'obhavo', norm_text)
+    norm_text = re.sub(r'\bsoha', 'sohha', norm_text)
+    norm_text = unicodedata.normalize('NFC', norm_text)
+    norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
+    norm_text = re.sub(r'\s+', ' ', norm_text).strip()
+
+    # 2. Hierarchical clause splitting (max 200 chars)
+    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', norm_text) if s.strip()]
+    final_raw_chunks = []
+    for sent in raw_sentences:
+        final_raw_chunks.extend(split_clause_smart(sent, max_chars=200))
+
+    # 3. Identify pause types and clean strictly for vocab
+    text_chunks = []
+    chunk_pause_types = []
+    for rc in final_raw_chunks:
+        rc_clean = rc.strip()
+        if re.search(r'[.!?]$', rc_clean):
+            p_type = 'terminal'
+        elif re.search(r'[,;:]$', rc_clean):
+            p_type = 'clause'
         else:
-            parts = [p.strip() for p in re.split(r'(?<=[,;:])\s+', sent) if p.strip()]
-            sentences.extend(parts if parts else [sent])
+            p_type = 'connector'
 
-    waves = []
-    pause_samples = int(0.24 * target_sample_rate)
+        rc_for_vocab = rc_clean.replace(',', '.')
+        c = clean_text_strictly_for_vocab(rc_for_vocab, vocab_char_map, style=style, already_normalized=True)
+        c = c.strip().strip(',;:').strip()
+        if c:
+            text_chunks.append(c)
+            chunk_pause_types.append(p_type)
 
-    for idx, sent in enumerate(sentences, 1):
-        c_sent = clean_u(sent)
-        full_text = [ref_clean + " " + c_sent]
+    if not text_chunks:
+        return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
-        dur_sec = calc_duration(c_sent, spd=effective_speed)
+    # 4. Inference loop per chunk with exact phonetic duration
+    generated_waves = []
+    for clean_chunk, p_type in zip(text_chunks, chunk_pause_types):
+        is_terminal = (p_type == 'terminal')
+        chunk_for_model = clean_chunk if clean_chunk.endswith(('.', '?', '!')) else (clean_chunk + ('.' if is_terminal else ','))
+
+        dur_sec = calculate_phonetic_duration(chunk_for_model, is_terminal_sentence=is_terminal, speed_factor=effective_speed)
         target_frames = int(dur_sec * target_sample_rate / hop_length)
-        duration = ref_audio_len + target_frames
+        duration = ref_mel_len + target_frames
+        full_text = [r_text + " " + chunk_for_model]
 
         with torch.inference_mode():
-            gen, _ = ENGINE["cfm"].sample(
+            gen, _ = cfm.sample(
                 cond=ref_audio,
                 text=full_text,
                 duration=duration,
-                steps=32,
+                steps=steps,
                 cfg_strength=1.55,
                 sway_sampling_coef=-1.0,
-                seed=seed + idx if seed is not None else None,
+                seed=seed,
             )
-            gen = gen.to(torch.float32)[:, ref_audio_len:, :].permute(0, 2, 1).cpu()
-            w = ENGINE["vocoder"].decode(gen).squeeze().cpu().numpy()
-
-            fade = int(0.015 * target_sample_rate)
-            if len(w) > fade:
-                w[-fade:] *= np.linspace(1, 0, fade)
-
-            waves.append(w)
-            if idx < len(sentences):
-                waves.append(np.zeros(pause_samples, dtype=np.float32))
-
-            if ENGINE["device"] == "cuda":
+            gen = gen.to(torch.float32)[:, ref_mel_len:, :].permute(0, 2, 1)
+            mel_spec = gen.to(vocoder_device)
+            wave_chunk = vocoder.decode(mel_spec).squeeze().cpu().numpy()
+            if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-    full_audio = np.concatenate(waves)
-    full_audio = apply_dsp(full_audio, prof=voice)
+            generated_waves.append((wave_chunk, p_type))
+
+    # 5. Studio-Grade Zero-Defect Stitching (Speech bounds cleaning + natural pauses)
+    raw_chunks = [w for w, _ in generated_waves]
+    p_types = [pt for _, pt in generated_waves]
+
+    wave = stitch_chunks_zero_defect(
+        raw_chunks,
+        p_types,
+        sr=target_sample_rate,
+        terminal_pause_ms=260,
+        clause_pause_ms=100,
+        connector_pause_ms=80
+    )
+
+    # 6. Apply Studio DSP
+    full_audio = apply_studio_dsp(wave, sr=target_sample_rate, profile=voice)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
-    # Encode to MP3 or WAV
+    # 7. Encode to MP3 or WAV
     if fmt == "mp3":
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav:
             sf.write(tmp_wav.name, full_audio, target_sample_rate)
