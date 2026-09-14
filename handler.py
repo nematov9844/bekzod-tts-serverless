@@ -117,8 +117,8 @@ def load_anchor(filename: str, fallback: Optional[str] = None):
 
 classic_audio, classic_len = load_anchor("clean_ref_classic_baritone.wav", fallback="ref_classic_baritone.wav")
 modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="ref_modern_active.wav")
-storyteller_audio, storyteller_len = load_anchor("clean_ref_storyteller.wav", fallback="clean_ref_classic_baritone.wav")
-inquisitive_audio, inquisitive_len = load_anchor("clean_ref_inquisitive.wav", fallback="clean_ref_modern_active.wav")
+storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
+inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -135,15 +135,15 @@ VOICE_PROFILES = {
     },
     "storyteller": {
         "audio": storyteller_audio,
-        "ref_text": "tasavvur qiling bojxona mahsulotining qiymati.",
+        "ref_text": "tasavvur qiling.",
         "mel_len": storyteller_len,
-        "speed_factor": 0.88,
+        "speed_factor": 0.98,
     },
     "inquisitive": {
         "audio": inquisitive_audio,
         "ref_text": "bu savol amaliyotda juda qiziqtiradi.",
         "mel_len": inquisitive_len,
-        "speed_factor": 1.05,
+        "speed_factor": 1.02,
     }
 }
 
@@ -238,6 +238,26 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
 
     # Number suffixes attachment
     norm_text = re.sub(r'\b(bir|ikki|uch|to\'rt|besh|olti|yetti|sakkiz|to\'qqiz|o\'n|yigirma|o\'ttiz|qirq|ellik|oltmish|yetmish|sakson|sakkson|to\'qson|yuz|ming|million|milliyon|milliard)\s+(dan|ga|da|ni|ning)\b', r'\1\2', norm_text)
+
+    # Pronoun and clitic reductions (hech kim -> hechkim, hech narsa -> hechnarsa)
+    norm_text = re.sub(r'\bhech\s+kim\b', 'hechkim', norm_text)
+    norm_text = re.sub(r'\bhech\s+narsa\b', 'hechnarsa', norm_text)
+    norm_text = re.sub(r'\bhech\s+qachon\b', 'hechqachon', norm_text)
+    norm_text = re.sub(r'\bhech\s+qanday\b', 'hechqanday', norm_text)
+    norm_text = re.sub(r'\bhech\s+qayer\b', 'hechqayer', norm_text)
+    norm_text = re.sub(r'\bhech\s+biri\b', 'hechbiri', norm_text)
+    norm_text = re.sub(r'\bhar\s+bir\b', 'harbir', norm_text)
+    norm_text = re.sub(r'\bhar\s+doim\b', 'hardoyim', norm_text)
+    norm_text = re.sub(r'\bhar\s+kim\b', 'harkim', norm_text)
+    norm_text = re.sub(r'\bhar\s+qanday\b', 'harqanday', norm_text)
+    norm_text = re.sub(r'\bbiror\s+bir\b', 'birorbir', norm_text)
+
+    # Narrative clitics reduction (bor ekan -> borekan, yo\'q ekan -> yo\'qekan)
+    norm_text = re.sub(r'\bbor\s+ekan\b', 'borekan', norm_text)
+    norm_text = re.sub(r'\byo\'q\s+ekan\b', 'yo\'qekan', norm_text)
+    norm_text = re.sub(r'\bbo\'lgan\s+ekan\b', 'bo\'lganekan', norm_text)
+    norm_text = re.sub(r'\bsezmagan\s+ekan\b', 'sezmaganekan', norm_text)
+    norm_text = re.sub(r'-ku\b', 'ku', norm_text)
 
     # Normalize apostrophes
     norm_text = unicodedata.normalize('NFC', norm_text)
