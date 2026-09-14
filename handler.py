@@ -155,7 +155,12 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'\bshoir', 'shoiir', norm_text)
     norm_text = re.sub(r'\brais\b', 'raiis', norm_text)
 
-    # Orphoepic reduction of unstressed 'i' (qalin -> qaln)
+    # Orphoepic reduction of unstressed 'i' with terminal nasal resonance/stress:
+    # "qalin" root -> "qalnn" (urg'u oxirgi n ga o'tadi: qalN / qalnn)
+    norm_text = re.sub(r'\bqalin\b', 'qalnn', norm_text)
+    norm_text = re.sub(r'\bqaln\b', 'qalnn', norm_text)
+    norm_text = re.sub(r'\bqalin(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', norm_text)
+    norm_text = re.sub(r'\bqaln(da|ku|chi|mi|dir|dek)\b', r'qalnn\1', norm_text)
     norm_text = re.sub(r'\bqalin([a-z\']*)', r'qaln\1', norm_text)
 
     # Dashes to spaces
