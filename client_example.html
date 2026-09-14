@@ -2,110 +2,514 @@
 <html lang="uz">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bekzod Voice TTS — RunPod Serverless Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Bekzod Voice TTS — RunPod Studio Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0d1117;
-      color: #c9d1d9;
-      display: flex;
-      justify-content: center;
-      padding: 40px 20px;
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(22, 30, 46, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --input-bg: #0e1422;
+      --input-border: #26334d;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --danger: #f43f5e;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
     }
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 24px;
-      width: 100%;
-      max-width: 580px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    }
-    h2 { margin-top: 0; color: #58a6ff; font-size: 20px; }
-    label { display: block; margin: 14px 0 6px; font-weight: 500; font-size: 13px; color: #8b949e; }
-    input, textarea, select {
-      width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: #f0f6fc;
-      font-size: 14px;
+
+    * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
-    textarea { resize: vertical; min-height: 90px; }
-    .row { display: flex; gap: 12px; }
-    .col { flex: 1; }
-    button {
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 45%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .container {
       width: 100%;
-      margin-top: 20px;
-      padding: 12px;
-      background: #238636;
-      border: none;
-      border-radius: 8px;
-      color: white;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 10px;
+      margin-bottom: 40px;
     }
-    button:hover { background: #2ea043; }
-    button:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
-    .status { margin-top: 14px; font-size: 13px; color: #8b949e; }
-    audio { width: 100%; margin-top: 16px; display: none; }
-    pre {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      padding: 10px;
-      border-radius: 6px;
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .logo-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .logo-text h1 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: #fff;
+    }
+
+    .logo-text p {
       font-size: 11px;
-      overflow-x: auto;
-      max-height: 150px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-size: 11px;
+      font-weight: 600;
+      color: #34d399;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* Main Card */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Inputs */
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    input[type="password"],
+    input[type="text"],
+    textarea,
+    select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      color: var(--text-main);
+      font-size: 14px;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 110px;
+      line-height: 1.5;
+    }
+
+    /* Quick Presets */
+    .presets-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .preset-chip {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #7dd3fc;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .preset-chip:active {
+      transform: scale(0.96);
+    }
+
+    .preset-chip:hover {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: var(--accent);
+    }
+
+    /* Controls Grid */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+      .card {
+        padding: 16px;
+      }
+      .header {
+        padding: 10px 14px;
+      }
+    }
+
+    /* Button */
+    .btn-submit {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #0284c7, #0284c7 40%, #0369a1);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35);
+      transition: all 0.2s ease;
+    }
+
+    .btn-submit:hover {
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      box-shadow: 0 6px 22px rgba(2, 132, 199, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-submit:active {
+      transform: translateY(1px);
+    }
+
+    .btn-submit:disabled {
+      background: #1e293b;
+      color: #64748b;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Metrics & Result Box */
+    .result-box {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      text-align: center;
+    }
+
+    .metric-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .metric-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    audio {
+      width: 100%;
+      outline: none;
+      border-radius: var(--radius-sm);
+      margin-top: 4px;
+    }
+
+    .btn-download {
+      width: 100%;
+      padding: 10px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-download:hover {
+      background: rgba(16, 185, 129, 0.25);
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .info-tip {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      background: rgba(255,255,255,0.02);
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     }
   </style>
 </head>
 <body>
 
-<div class="card">
-  <h2>🎙️ Bekzod Voice TTS (RunPod Serverless)</h2>
-  
-  <label>RunPod API Key</label>
-  <input type="password" id="apiKey" placeholder="rpa_..." />
-
-  <label>Matn (O'zbek tilida)</label>
-  <textarea id="text">Assalomu alaykum! Ushbu audio RunPod Serverless GPU orqali generatsiya qilindi.</textarea>
-
-  <div class="row">
-    <div class="col">
-      <label>Ovoz Profili</label>
-      <select id="voice">
-        <option value="modern">Modern (Tiniq & Dinamik)</option>
-        <option value="classic">Classic (Bariton & Muloyim)</option>
-      </select>
+<div class="container">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo-badge">
+      <div class="logo-icon">🎙️</div>
+      <div class="logo-text">
+        <h1>Bekzod Voice TTS</h1>
+        <p>140k Native Uzbek • RunPod Serverless</p>
+      </div>
     </div>
-    <div class="col">
-      <label>Tezlik (Speed)</label>
-      <select id="speed">
-        <option value="0.9">0.9x (Vazmin)</option>
-        <option value="1.0" selected>1.0x (Tabiiy)</option>
-        <option value="1.1">1.1x (Tezroq)</option>
-        <option value="1.2">1.2x (Dinamik)</option>
-      </select>
+    <div class="status-pill" id="endpointStatus">
+      <div class="status-dot"></div>
+      <span>Online</span>
     </div>
-  </div>
+  </header>
 
-  <button id="btnGen" onclick="generateTTS()">Ovoz Generatsiya Qilish</button>
+  <!-- Main Studio Card -->
+  <main class="card">
+    <!-- API Key -->
+    <div class="field-group">
+      <label for="apiKey">RunPod API Kaliti</label>
+      <input type="password" id="apiKey" placeholder="rpa_..." autocomplete="off" />
+    </div>
 
-  <div id="status" class="status"></div>
-  <audio id="player" controls></audio>
-  <pre id="debugLog" style="display:none;"></pre>
+    <!-- Quick Presets -->
+    <div class="field-group">
+      <div class="section-title">
+        <span>Sinov Uchun Tayyor Matnlar</span>
+        <span style="font-size: 10px; color: #64748b;">(Bir bosishda to'ldirish)</span>
+      </div>
+      <div class="presets-container">
+        <button type="button" class="preset-chip" onclick="setPreset('complex')">🔬 Full Murakkab So'z & Raqamlar</button>
+        <button type="button" class="preset-chip" onclick="setPreset('qalin')">⚡ Qalin (QalNN Urg'usi)</button>
+        <button type="button" class="preset-chip" onclick="setPreset('loanwords')">📻 Audyo, Vidyo & Radyo</button>
+        <button type="button" class="preset-chip" onclick="setPreset('orthoepy')">🏛️ Oila, Maktabga & Ushta</button>
+      </div>
+    </div>
+
+    <!-- Textarea -->
+    <div class="field-group">
+      <label for="text">Matn (O'zbek tilida)</label>
+      <textarea id="text" placeholder="TTS uchun matn kiriting...">2024-yil 15-sentabr kuni nanotexnologiyalar, kiberxavfsizlik va sun'iy intellekt bo'yicha 12 ta yangi loyihaga 450 000 000 so'm mablag' ajratildi. Tog'lar bag'rida, qalin o'rmon uzra tong otishi har doim o'zgacha sokinlik kasb etadi.</textarea>
+    </div>
+
+    <!-- Parameters Grid -->
+    <div class="controls-grid">
+      <div class="field-group">
+        <label for="voice">Ovoz Profili</label>
+        <select id="voice">
+          <option value="classic" selected>Classic (Bariton & Muloyim)</option>
+          <option value="modern">Modern (Tiniq & Dinamik)</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="steps">Diffuziya Qadami (Tezlik)</label>
+        <select id="steps">
+          <option value="16">16 qadam (⚡ 2x Ultra Tezkor)</option>
+          <option value="24">24 qadam (🚀 Tezkor & Balans)</option>
+          <option value="32" selected>32 qadam (🏆 Studiya Master)</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="speed">Tezlik (Speed)</label>
+        <select id="speed">
+          <option value="0.9">0.9x (Vazmin)</option>
+          <option value="1.0" selected>1.0x (Tabiiy)</option>
+          <option value="1.1">1.1x (Tezroq)</option>
+          <option value="1.2">1.2x (Dinamik)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Generate Button -->
+    <button type="button" class="btn-submit" id="btnGen" onclick="generateTTS()">
+      <span id="btnIcon">⚡</span>
+      <span id="btnText">Ovoz Generatsiya Qilish</span>
+    </button>
+
+    <!-- Info Tip -->
+    <div class="info-tip">
+      💡 <strong>Tezlik haqida:</strong> 32 qadamda 2 minutli audio ~50-56 sekundda chiqadi (2.1x real-time). 16 qadam tanlansa, sifat saqlangan holda generatsiya ~25 sekundga (4.3x tezroq) tushadi!
+    </div>
+
+    <!-- Result Box -->
+    <div class="result-box" id="resultBox">
+      <div class="section-title">Generatsiya Natijasi</div>
+      
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-label">Vaqt</div>
+          <div class="metric-value" id="resElapsed">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Audio Uzunligi</div>
+          <div class="metric-value" id="resDuration">--</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tezlik (RTF)</div>
+          <div class="metric-value" id="resSpeed">--</div>
+        </div>
+      </div>
+
+      <audio id="player" controls></audio>
+
+      <button type="button" class="btn-download" id="btnDownload" onclick="downloadAudio()">
+        📥 MP3 Faylni Yuklab Olish
+      </button>
+    </div>
+
+    <!-- Error/Log Box -->
+    <div id="errorBox" style="display:none; color: #f43f5e; font-size: 13px; padding: 12px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.25); border-radius: var(--radius-sm);"></div>
+  </main>
 </div>
 
 <script>
 const ENDPOINT_ID = "pz1f73i1e7dd58";
+let currentAudioBlobUrl = null;
 
-// Load stored API key if exists
+// Presets
+const PRESETS = {
+  complex: "2024-yil 15-sentabr kuni nanotexnologiyalar, kiberxavfsizlik va sun'iy intellekt bo'yicha 12 ta yangi loyihaga 450 000 000 so'm mablag' ajratildi. Tog'lar bag'rida, qalin o'rmon uzra tong otishi har doim o'zgacha sokinlik kasb etadi.",
+  qalin: "Bu kitob juda qalin ekan. Qishda qalin kiyim kiyish kerak, chunki sovuq qattiq bo'ladi.",
+  loanwords: "Bugun yangi audyo kitob va vidyo dars chiqdi. Radyo orqali ham e'lon qilindi, yangi materyal bilan tanishing.",
+  orthoepy: "Shanba kuni oila davrasida shoir va rais bilan suhbatlashdik. Maktabga borib, kitobga qaraymiz va ushta yangi vazifani bajaramiz."
+};
+
+function setPreset(type) {
+  if (PRESETS[type]) {
+    document.getElementById("text").value = PRESETS[type];
+  }
+}
+
+// Stored API key
 document.getElementById("apiKey").value = localStorage.getItem("runpod_api_key") || "";
 
 async function generateTTS() {
@@ -113,25 +517,32 @@ async function generateTTS() {
   const text = document.getElementById("text").value.trim();
   const voice = document.getElementById("voice").value;
   const speed = parseFloat(document.getElementById("speed").value);
+  const steps = parseInt(document.getElementById("steps").value);
+
   const btn = document.getElementById("btnGen");
-  const status = document.getElementById("status");
+  const btnIcon = document.getElementById("btnIcon");
+  const btnText = document.getElementById("btnText");
+  const resultBox = document.getElementById("resultBox");
+  const errorBox = document.getElementById("errorBox");
   const player = document.getElementById("player");
-  const debugLog = document.getElementById("debugLog");
 
   if (!apiKey) {
-    alert("Iltimos, RunPod API Key kiriting!");
+    alert("Iltimos, RunPod API Kalitini kiriting!");
     return;
   }
   if (!text) {
-    alert("Matn bo'sh bo'lmasin!");
+    alert("Matn kiritilmagan!");
     return;
   }
 
   localStorage.setItem("runpod_api_key", apiKey);
+
+  // Loading state
   btn.disabled = true;
-  status.textContent = "⏳ Serverless workerga so'rov yuborilmoqda (cold start bo'lsa ~20s, warm bo'lsa ~2s)...";
-  player.style.display = "none";
-  debugLog.style.display = "none";
+  btnIcon.innerHTML = '<div class="spinner"></div>';
+  btnText.textContent = "Generatsiya qilinmoqda...";
+  resultBox.style.display = "none";
+  errorBox.style.display = "none";
 
   const startTime = Date.now();
 
@@ -147,6 +558,7 @@ async function generateTTS() {
           text: text,
           voice: voice,
           speed: speed,
+          steps: steps,
           format: "mp3"
         }
       })
@@ -156,20 +568,52 @@ async function generateTTS() {
     const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(2);
 
     if (data.status === "COMPLETED" && data.output && data.output.audio_base64) {
-      status.textContent = `✅ Tayyor! (${elapsedSec}s da bajarildi, Audio: ${data.output.duration}s)`;
-      player.src = `data:audio/mp3;base64,${data.output.audio_base64}`;
-      player.style.display = "block";
-      player.play();
+      const durationSec = parseFloat(data.output.duration || 0).toFixed(1);
+      const rtf = (elapsedSec / Math.max(0.1, durationSec)).toFixed(2);
+      const speedMultiplier = (durationSec / Math.max(0.1, elapsedSec)).toFixed(1);
+
+      document.getElementById("resElapsed").textContent = `${elapsedSec}s`;
+      document.getElementById("resDuration").textContent = `${durationSec}s`;
+      document.getElementById("resSpeed").textContent = `${speedMultiplier}x tez`;
+
+      // Decode base64 audio
+      const binaryString = atob(data.output.audio_base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "audio/mp3" });
+
+      if (currentAudioBlobUrl) {
+        URL.revokeObjectURL(currentAudioBlobUrl);
+      }
+      currentAudioBlobUrl = URL.createObjectURL(blob);
+
+      player.src = currentAudioBlobUrl;
+      resultBox.style.display = "flex";
+      player.play().catch(() => {});
     } else {
-      status.textContent = `❌ Xatolik yuz berdi: ${JSON.stringify(data.error || data)}`;
-      debugLog.style.display = "block";
-      debugLog.textContent = JSON.stringify(data, null, 2);
+      errorBox.style.display = "block";
+      errorBox.textContent = `Xatolik: ${JSON.stringify(data.error || data)}`;
     }
   } catch (err) {
-    status.textContent = `❌ So'rovda tarmoq xatosi: ${err.message}`;
+    errorBox.style.display = "block";
+    errorBox.textContent = `Tarmoq xatosi: ${err.message}`;
   } finally {
     btn.disabled = false;
+    btnIcon.textContent = "⚡";
+    btnText.textContent = "Ovoz Generatsiya Qilish";
   }
+}
+
+function downloadAudio() {
+  if (!currentAudioBlobUrl) return;
+  const a = document.createElement("a");
+  a.href = currentAudioBlobUrl;
+  a.download = `bekzod_tts_${Date.now()}.mp3`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 </script>
 
