@@ -120,6 +120,7 @@ modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="
 storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
+melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v1_clean.wav", fallback="clean_ref_classic_baritone.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -151,12 +152,21 @@ VOICE_PROFILES = {
         "ref_text": "tashqi iqtisodiy faoliyatda qonuniy raqobatni ta'minlaydi.",
         "mel_len": cheerful_len,
         "speed_factor": 1.04,
+    },
+    "melancholic": {
+        "audio": melancholic_audio,
+        "ref_text": "yangilangan konvensiya bir ming to'qqiz yuz to'qson to'qqizinchi yilda qabul qilingan.",
+        "mel_len": melancholic_len,
+        "speed_factor": 0.96,
     }
 }
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
 VOICE_PROFILES["shodiyona"] = VOICE_PROFILES["cheerful"]
+VOICE_PROFILES["gamgin"] = VOICE_PROFILES["melancholic"]
+VOICE_PROFILES["mayus"] = VOICE_PROFILES["melancholic"]
+VOICE_PROFILES["dramatic"] = VOICE_PROFILES["melancholic"]
 
-print(f"[✓] Bekzod TTS Engine (5 emotion profiles) initialized successfully on {DEVICE}!")
+print(f"[✓] Bekzod TTS Engine (6 emotion profiles) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
