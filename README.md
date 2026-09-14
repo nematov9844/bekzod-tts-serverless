@@ -1,6 +1,6 @@
-# Bekzod Voice 140k — RunPod Serverless TTS Engine
+# Bekzod Voice 150k — RunPod Serverless TTS Engine
 
-Ushbu endpoint **RunPod Serverless** platformasida ishga tushirilgan bo'lib, **Pay-As-You-Go** (faqat so'rov vaqtida to'lov, ishlatilmaganda **$0.00**) rejimida ishlaydi.
+F5-TTS asosidagi o'zbek tilidagi eng yuqori sifatli (150k Studio Clean, -89.2 dBFS shovqinsiz) ovoz sintezi backend tizimi. RunPod Serverless GPU (RTX 4090 / A40 / L4) arxitekturasida ishlaydi, **Pay-As-You-Go** (faqat so'rov vaqtida to'lov, ishlatilmaganda **$0.00**) rejimida.
 
 ---
 

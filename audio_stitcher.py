@@ -27,7 +27,7 @@ import scipy.signal as signal
 SR = 24000
 sos_hp = signal.butter(4, 65, 'hp', fs=SR, output='sos')
 
-def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 40, pad_tail_ms: int = 120) -> np.ndarray:
+def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 50, pad_tail_ms: int = 140) -> np.ndarray:
     """
     Cleans vocoder onset latency and trailing vocoder air from an F5-TTS chunk.
     Preserves all delicate consonants and release decay without any chopping.
@@ -92,7 +92,7 @@ def stitch_chunks_zero_defect(
         is_last = (idx == n_chunks - 1)
         # 180ms tail on final chunk so trailing suffixes (-da, -dan, -moqda) are 100% intact
         tail_ms = 180 if is_last else 150
-        c_clean = clean_speech_bounds(c.astype(np.float32), sr=sr, pad_lead_ms=45, pad_tail_ms=tail_ms)
+        c_clean = clean_speech_bounds(c.astype(np.float32), sr=sr, pad_lead_ms=50, pad_tail_ms=tail_ms)
         cleaned_chunks.append(c_clean)
 
     # Soft inter-chunk gain leveling (smooths energy jumps between chunks)

@@ -1,5 +1,5 @@
 """
-handler.py — RunPod Serverless Worker for Bekzod Voice 140k F5-TTS
+handler.py — RunPod Serverless Worker for Bekzod Voice 150k F5-TTS
 Zero-Defect Speech Bounds Trimming + Crystal Black Background Gate + Studio Baritone Warmth DSP
 """
 
@@ -35,7 +35,7 @@ from audio_stitcher import clean_speech_bounds
 # 1. INITIALIZATION & ASSET LOADING (RUNS ONCE ON WORKER COLD START)
 # ─────────────────────────────────────────────────────────────────────────────
 
-print("[*] Initializing Bekzod TTS Engine on cold start...")
+print("[*] Initializing Bekzod TTS 150k Studio Clean Engine on cold start...")
 
 REPO_ID = os.environ.get("HF_REPO_ID", "lynx9844/f5tts-bekzod-200k-uzbek")
 HF_TOKEN = os.environ.get("HF_TOKEN", None)
@@ -57,8 +57,9 @@ valid_vocab = [l for i, l in enumerate(raw_vocab) if l != "" or i == 0]
 vocab_char_map = {l: i for i, l in enumerate(valid_vocab)}
 vocab_size = len(vocab_char_map)
 
-# 2. Checkpoint (model_140000.safetensors)
-ckpt_path = get_file("model_140000.safetensors")
+# 2. Checkpoint (model_150000_studio_clean.safetensors)
+MODEL_CHECKPOINT = os.environ.get("MODEL_CHECKPOINT", "model_150000_studio_clean.safetensors")
+ckpt_path = get_file(MODEL_CHECKPOINT)
 
 model = DiT(
     dim=1024,
@@ -94,9 +95,16 @@ else:
 vocoder_device = "cpu" if DEVICE == "cuda" else DEVICE
 vocoder = load_vocoder("vocos", device=vocoder_device)
 
-# 4. Reference Anchors
-def load_anchor(filename: str):
-    p = get_file(filename)
+# 4. Reference Anchors (Clean Studio-Grade)
+def load_anchor(filename: str, fallback: Optional[str] = None):
+    try:
+        p = get_file(filename)
+    except Exception as e:
+        if fallback:
+            print(f"[!] {filename} topilmadi, fallback {fallback} ishlatilmoqda: {e}")
+            p = get_file(fallback)
+        else:
+            raise e
     a, sr = torchaudio.load(p)
     if sr != target_sample_rate:
         a = torchaudio.functional.resample(a, sr, target_sample_rate)
@@ -107,8 +115,8 @@ def load_anchor(filename: str):
     mel_len = a.shape[-1] // hop_length
     return a, mel_len
 
-classic_audio, classic_len = load_anchor("ref_classic_baritone.wav")
-modern_audio, modern_len = load_anchor("ref_modern_active.wav")
+classic_audio, classic_len = load_anchor("clean_ref_classic_baritone.wav", fallback="ref_classic_baritone.wav")
+modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -382,11 +390,11 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            # Clean vocoder onset latency and trailing vocoder air
+            # Clean vocoder onset latency and trailing vocoder air (50ms lead preserves initial plosives B, P)
             chunk_clean = clean_speech_bounds(
                 wave_chunk.astype(np.float32),
                 sr=target_sample_rate,
-                pad_lead_ms=45,
+                pad_lead_ms=50,
                 pad_tail_ms=160
             )
             generated_waves.append(chunk_clean)

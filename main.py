@@ -63,7 +63,8 @@ async def synthesize(**kwargs) -> dict:
         vocab_char_map = {l: i for i, l in enumerate(valid_vocab)}
 
         # 2. Checkpoint yuklash
-        ckpt_path = hf_hub_download(repo_id=repo_id, filename="model_140000.safetensors")
+        ckpt_name = os.environ.get("MODEL_CHECKPOINT", "model_150000_studio_clean.safetensors")
+        ckpt_path = hf_hub_download(repo_id=repo_id, filename=ckpt_name)
 
         # 3. Modelni qurish
         model = DiT(
