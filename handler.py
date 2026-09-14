@@ -340,8 +340,8 @@ def handler(job: dict) -> dict:
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
 
-    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses, max 140 chars)
-    raw_sentences = split_sentences_natural(norm_text, max_chars=140)
+    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses, max 110 chars)
+    raw_sentences = split_sentences_natural(norm_text, max_chars=110)
     if not raw_sentences:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
