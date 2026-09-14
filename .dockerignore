@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env*
+.flash
+models
+f5_tts
+*.mp3
+*.wav
+__pycache__
+*.pyc
+README.md
+AGENTS.md
+CLAUDE.md
