@@ -1,6 +1,6 @@
 """
 handler.py — RunPod Serverless Worker for Bekzod Voice 140k F5-TTS
-100% Exact 1-to-1 Replica of Local Perfect Studio Benchmark (generate_perfect_140k_local.py)
+Zero-Defect Speech Bounds Trimming + Crystal Black Background Gate + Studio Baritone Warmth DSP
 """
 
 import os
@@ -127,7 +127,7 @@ VOICE_PROFILES = {
 print(f"[✓] Bekzod TTS Engine initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. EXACT 1-TO-1 TEXT PREPROCESSING & DSP
+# 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 
 def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = "adabiy", already_normalized: bool = False) -> str:
@@ -136,7 +136,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     else:
         norm_text = text.lower()
     
-    # Standalone English/tech abbreviations to pronunciation
+    # Standalone abbreviations to pronunciation
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
     norm_text = re.sub(r'\bit\b', 'ay ti', norm_text)
@@ -148,7 +148,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'\bob[- ]havo\b', 'obhavo', norm_text)
     norm_text = re.sub(r'\bsoha', 'sohha', norm_text)
 
-    # Hiatus reinforcement (unlilar to'qnashuvini kuchaytirish)
+    # Hiatus reinforcement
     norm_text = re.sub(r'\boila', 'oiila', norm_text)
     norm_text = re.sub(r'\bdoira', 'doiira', norm_text)
     norm_text = re.sub(r'\bshoir', 'shoiir', norm_text)
@@ -173,7 +173,7 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = unicodedata.normalize('NFC', norm_text)
     norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
     
-    # Replace non-vocab punctuation (vergullar gap ichida saqlanmaydi, faqat nuqta qilinadi)
+    # Replace non-vocab punctuation
     norm_text = norm_text.replace("!", ".").replace("?", ".").replace(":", ".").replace(";", ".").replace('"', '').replace('(', '').replace(')', '')
     
     # Filter for vocab
@@ -196,7 +196,6 @@ def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
         if len(s) <= max_chars:
             chunks.append(s)
         else:
-            # Split long sentence at comma boundary
             parts = [p.strip() for p in re.split(r'(?<=[,;:])\s+', s) if p.strip()]
             current = ""
             for p in parts:
@@ -211,15 +210,53 @@ def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
 
     return chunks
 
+def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 40, pad_tail_ms: int = 150) -> np.ndarray:
+    """
+    Cuts empty vocoder air and latency at beginning and end of each chunk,
+    while strictly preserving consonants and trailing release decay (-di, -da, -gan).
+    5ms cosine micro-fade eliminates clicks.
+    """
+    if len(wave) < int(0.08 * sr):
+        return wave
+
+    frame_len = int(0.015 * sr)
+    hop_len = int(0.005 * sr)
+    n_frames = (len(wave) - frame_len) // hop_len + 1
+    if n_frames < 3:
+        return wave
+
+    rms = np.array([
+        np.sqrt(np.mean(wave[i * hop_len : i * hop_len + frame_len] ** 2))
+        for i in range(n_frames)
+    ])
+    noise_floor = np.percentile(rms, 15)
+    thresh = max(0.0025, noise_floor * 1.15)
+    active = np.where(rms > thresh)[0]
+    if len(active) == 0:
+        return wave
+
+    lead_sample = max(0, int((active[0] * hop_len) - (pad_lead_ms / 1000.0 * sr)))
+    tail_sample = min(len(wave), int(((active[-1] * hop_len) + frame_len) + (pad_tail_ms / 1000.0 * sr)))
+    trimmed = wave[lead_sample:tail_sample].copy()
+
+    # 5ms cosine crossfade
+    fade = int(0.005 * sr)
+    if len(trimmed) > 2 * fade and fade > 0:
+        t = np.linspace(0, np.pi / 2, fade).astype(np.float32)
+        trimmed[:fade] *= np.sin(t)
+        trimmed[-fade:] *= np.cos(t)
+    return trimmed
+
 def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     """
-    Exact local benchmark DSP (apply_baritone_dsp from generate_perfect_140k_local.py):
-    1. 150 Hz Low-Shelf (+1.8 dB baritone warmth and masculine presence)
-    2. 70 Hz Butterworth HPF (clean cut of sub-bass rumble without touching vocal fundament)
-    3. True Peak Normalization (-1 dB / 0.89)
+    Studio DSP Master:
+    1. 150 Hz Low-Shelf (+1.6 dB baritone warmth and body)
+    2. 70 Hz Butterworth HPF (clean cut of sub-bass rumble)
+    3. Smooth Studio Noise Gate (eliminates ambient background hiss in silence, zero consonant clipping)
+    4. True Peak Normalization (-1 dB / 0.89)
     """
-    # 1. Low shelf warmth (+1.8 dB)
-    gain = 10 ** (1.8 / 20.0)
+    # 1. Low shelf warmth (+1.6 dB)
+    gain = 10 ** (1.6 / 20.0)
     sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
     low_band = signal.sosfiltfilt(sos_low, wave)
     out = wave + (gain - 1.0) * low_band
@@ -228,12 +265,31 @@ def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
     out = signal.sosfiltfilt(sos_hp, out)
 
-    # 3. Peak Limiter (-1 dB / 0.89)
-    peak = np.max(np.abs(out))
-    if peak > 1e-5:
-        out = out * (0.89 / peak)
+    # 3. Smooth Studio Noise Gate (10ms attack, 200ms safe release to preserve soft vowels)
+    attack_coeff = np.exp(-1.0 / (0.010 * sr))
+    release_coeff = np.exp(-1.0 / (0.200 * sr))
+    env = np.zeros_like(out)
+    curr = 0.0
+    for i in range(len(out)):
+        a = abs(out[i])
+        if a > curr:
+            curr = a + attack_coeff * (curr - a)
+        else:
+            curr = a + release_coeff * (curr - a)
+        env[i] = curr
 
-    return out.astype(np.float32)
+    thresh = 0.0035
+    floor = 0.0008
+    gate_gain = np.clip((env - floor) / (thresh - floor), 0.0, 1.0)
+    gate_gain = 0.5 * (1.0 - np.cos(np.pi * gate_gain))
+    gated = out * gate_gain
+
+    # 4. Peak Limiter (-1 dB / 0.89)
+    peak = np.max(np.abs(gated))
+    if peak > 1e-5:
+        gated = gated * (0.89 / peak)
+
+    return gated.astype(np.float32)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,11 +302,9 @@ def handler(job: dict) -> dict:
     if not raw_text:
         return {"error": "Matn kiritilmagan ('text' bo'sh)", "status": "FAILED"}
 
-    # Default to Bekzod Classic Studio Baritone (the highest quality gold anchor)
     voice = job_input.get("voice", "classic").lower()
     style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
-    # Optimal diffusion steps: 48 for crystal-clear benchmark quality
     steps = int(job_input.get("steps", 48))
     fmt = job_input.get("format", "mp3").lower()
     seed = job_input.get("seed", 42)
@@ -282,7 +336,7 @@ def handler(job: dict) -> dict:
     norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
     norm_text = re.sub(r'\s+', ' ', norm_text).strip()
 
-    # 2. Natural sentence splitting (never split at every comma!)
+    # 2. Natural sentence splitting
     sentences = split_sentences_natural(norm_text, max_chars=220)
 
     # 3. Clean each sentence strictly for vocab characters
@@ -298,9 +352,6 @@ def handler(job: dict) -> dict:
 
     # 4. Generate each full sentence with exact phonetic duration
     generated_waves = []
-    pause_samples = int(0.24 * target_sample_rate)  # 240ms natural breath pause between sentences
-    fade_samples = int(0.015 * target_sample_rate)  # 15ms anti-click smooth fade
-
     for idx, clean_chunk in enumerate(text_chunks):
         chunk_for_model = clean_chunk + "."
         dur_sec = calculate_phonetic_duration(chunk_for_model, speed_factor=effective_speed)
@@ -324,19 +375,28 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            # 15ms anti-click fade out
-            if len(wave_chunk) > fade_samples:
-                wave_chunk[-fade_samples:] *= np.linspace(1, 0, fade_samples)
-
             generated_waves.append(wave_chunk)
-            # Add breath pause between sentences
-            if idx < len(text_chunks) - 1:
-                generated_waves.append(np.zeros(pause_samples, dtype=np.float32))
 
-    # 5. Concatenate full speech stream
-    full_audio = np.concatenate(generated_waves)
+    # 5. Speech Bounds Trimming & Natural Breath Pauses (Unbroken Studio Stitching)
+    n_chunks = len(generated_waves)
+    cleaned_chunks = []
+    for idx, c in enumerate(generated_waves):
+        is_last = (idx == n_chunks - 1)
+        tail_ms = 180 if is_last else 140
+        c_clean = clean_speech_bounds(c.astype(np.float32), sr=target_sample_rate, pad_lead_ms=40, pad_tail_ms=tail_ms)
+        cleaned_chunks.append(c_clean)
 
-    # 6. Apply Exact Studio Master DSP
+    # 200ms natural studio pause between sentences (seamless flow, no awkward gaps)
+    pause_samples = int(0.20 * target_sample_rate)
+    final_pieces = []
+    for idx, c in enumerate(cleaned_chunks):
+        final_pieces.append(c)
+        if idx < n_chunks - 1:
+            final_pieces.append(np.zeros(pause_samples, dtype=np.float32))
+
+    full_audio = np.concatenate(final_pieces)
+
+    # 6. Apply Studio Master DSP (Baritone warmth + noise gate + peak norm)
     full_audio = apply_studio_master_dsp(full_audio, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
