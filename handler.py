@@ -206,15 +206,20 @@ def split_clause_smart(sent: str, max_chars: int = 200) -> List[str]:
 
 def apply_studio_dsp(wave: np.ndarray, sr: int = 24000, profile: str = "modern") -> np.ndarray:
     """
-    Server V2 Studio DSP:
-    - 70 Hz Butterworth HPF (sub-bass rumble and mic floor cut)
-    - Classic: 150 Hz Baritone Warmth (+1.8 dB low shelf)
-    - Modern: 8500 Hz Smooth High-cut (smooth high frequency polish)
-    - Peak normalization: -1 dB (0.89)
+    Enhanced Studio DSP:
+    1. 70 Hz Butterworth HPF (sub-bass rumble and mic floor cut)
+    2. Profile EQ (Classic: 150Hz warmth; Modern: 8500Hz smooth high-cut)
+    3. Smooth Studio Noise Gate (eliminates background hiss during quiet intervals)
+    4. Equal Loudness Normalization (levels Modern & Classic to identical volume)
+    5. True Peak Limiter (-1 dB / 0.89)
     """
     out = wave.copy()
+
+    # 1. 70 Hz Rumble HPF
     sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
     out = signal.sosfiltfilt(sos_hp, out)
+
+    # 2. Profile EQ
     if profile in ["classic", "bekzod"]:
         gain = 10 ** (1.8 / 20.0)
         sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
@@ -223,11 +228,49 @@ def apply_studio_dsp(wave: np.ndarray, sr: int = 24000, profile: str = "modern")
     else:
         sos_lp = signal.butter(2, 8500, 'lp', fs=sr, output='sos')
         out = signal.sosfiltfilt(sos_lp, out)
-        
-    peak = np.max(np.abs(out))
-    if peak > 1e-5:
-        out = out * (0.89 / peak)
-    return out.astype(np.float32)
+
+    # 3. Smooth Studio Noise Gate (10ms attack, 220ms safe release)
+    attack_coeff = np.exp(-1.0 / (0.010 * sr))
+    release_coeff = np.exp(-1.0 / (0.220 * sr))
+    env = np.zeros_like(out)
+    curr = 0.0
+    for i in range(len(out)):
+        a = abs(out[i])
+        if a > curr:
+            curr = a + attack_coeff * (curr - a)
+        else:
+            curr = a + release_coeff * (curr - a)
+        env[i] = curr
+
+    thresh = 0.005
+    floor = 0.001
+    gate_gain = np.clip((env - floor) / (thresh - floor), 0.0, 1.0)
+    gate_gain = 0.5 * (1.0 - np.cos(np.pi * gate_gain))
+    gated = out * gate_gain
+
+    # 4. Equal Loudness Normalization (Target active speech RMS: 0.125)
+    target_rms = 0.125
+    active_samples = gated[env > 0.01]
+    if len(active_samples) > 0:
+        active_rms = np.sqrt(np.mean(active_samples ** 2))
+    else:
+        active_rms = np.sqrt(np.mean(gated ** 2))
+
+    if active_rms > 0.001:
+        loudness_gain = target_rms / active_rms
+        levelled = gated * loudness_gain
+    else:
+        levelled = gated
+
+    # 5. Peak Limiter (-1 dB / 0.89)
+    peak = np.max(np.abs(levelled))
+    if peak > 0.89:
+        levelled = levelled * (0.89 / peak)
+    elif peak < 0.5 and peak > 0.001:
+        levelled = levelled * (0.85 / peak)
+
+    return levelled.astype(np.float32)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. RUNPOD SERVERLESS HANDLER
