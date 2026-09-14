@@ -120,7 +120,7 @@ modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="
 storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
-melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v4_expressive.wav", fallback="clean_ref_classic_baritone.wav")
+melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v5_pure.wav", fallback="clean_ref_classic_baritone.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -165,7 +165,7 @@ VOICE_PROFILES = {
     },
     "melancholic": {
         "audio": melancholic_audio,
-        "ref_text": "yangilangan konvensiya to'qson to'qqizinchi yilda qabul qilingan.",
+        "ref_text": "tashqi savdoni soddalashtirishga xizmat qilmoqda.",
         "mel_len": melancholic_len,
         "speed_factor": 0.86,
         "pause_ms": 0.44,
