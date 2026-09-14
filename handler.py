@@ -117,6 +117,8 @@ def load_anchor(filename: str, fallback: Optional[str] = None):
 
 classic_audio, classic_len = load_anchor("clean_ref_classic_baritone.wav", fallback="ref_classic_baritone.wav")
 modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="ref_modern_active.wav")
+storyteller_audio, storyteller_len = load_anchor("clean_ref_storyteller.wav", fallback="clean_ref_classic_baritone.wav")
+inquisitive_audio, inquisitive_len = load_anchor("clean_ref_inquisitive.wav", fallback="clean_ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -130,10 +132,22 @@ VOICE_PROFILES = {
         "ref_text": "transport orqali yevropada yevropa portiga u yerdan temir yo'l.",
         "mel_len": modern_len,
         "speed_factor": 1.02,
+    },
+    "storyteller": {
+        "audio": storyteller_audio,
+        "ref_text": "tasavvur qiling bojxona mahsulotining qiymati har bir davlatda turlicha hisoblansa.",
+        "mel_len": storyteller_len,
+        "speed_factor": 0.88,
+    },
+    "inquisitive": {
+        "audio": inquisitive_audio,
+        "ref_text": "bu savol amaliyotda juda qiziqtiradi agar tovar mening mulkim bo'lsa nega men uni istagan paytda ololmayman.",
+        "mel_len": inquisitive_len,
+        "speed_factor": 1.05,
     }
 }
 
-print(f"[✓] Bekzod TTS Engine initialized successfully on {DEVICE}!")
+print(f"[✓] Bekzod TTS Engine (4 emotion profiles) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
@@ -399,8 +413,9 @@ def handler(job: dict) -> dict:
             )
             generated_waves.append(chunk_clean)
 
-    # 5. Natural 240ms human breath pause between sentences
-    pause_samples = int(0.24 * target_sample_rate)
+    # 5. Natural human breath pause between sentences (320ms for storyteller, 240ms standard)
+    pause_ms = 0.32 if voice == "storyteller" else 0.24
+    pause_samples = int(pause_ms * target_sample_rate)
     final_pieces = []
     for idx, c in enumerate(generated_waves):
         final_pieces.append(c)
