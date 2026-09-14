@@ -117,12 +117,12 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                 if last_ch in "ptkqbdg" and first_ch in "ptkqbdg":
                     total_ms += 45 # Coarticulation mikro-pauzasi
                     
-    # Gap oxiridagi nafas chiqarish va vokal so'nish vaqti
-    total_ms += 350 if is_terminal_sentence else 180
+    # Gap oxiridagi vokal so'nish vaqti (100% benchmark o'lchami: 160ms)
+    total_ms += 160 if is_terminal_sentence else 100
 
     # Tezlik koeffitsiyenti (1.0 = normal, >1.0 = tezroq)
     total_sec = (total_ms / 1000.0) / max(0.5, speed_factor)
-    return max(1.9, total_sec)
+    return max(1.8, total_sec)
 
 def safe_render_wave(raw_wave: np.ndarray, sr: int = 24000, pad_tail_ms: int = 250, is_terminal: bool = True) -> np.ndarray:
     """

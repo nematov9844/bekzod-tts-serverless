@@ -210,32 +210,16 @@ def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
 
     return chunks
 
-def safe_render_wave(raw_wave: np.ndarray, sr: int = 24000) -> np.ndarray:
-    """
-    Strictly preserves Bekzod's real in-context breath decay at sentence endings.
-    Applies gentle 4ms micro-fade at onset and smooth 35ms cosine zero-crossing decay.
-    """
-    out = raw_wave.copy()
-    micro_fade = int(0.004 * sr)
-    if len(out) > micro_fade:
-        out[:micro_fade] *= np.linspace(0.2, 1.0, micro_fade)
-
-    fade_end = int(0.035 * sr)
-    if len(out) > fade_end:
-        out[-fade_end:] *= (1.0 + np.cos(np.linspace(0, np.pi, fade_end))) / 2.0
-
-    return out
-
 def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     """
-    Studio DSP Master:
-    1. 150 Hz Low-Shelf (+1.6 dB baritone warmth and body)
+    Studio DSP Master (100% Exact to generate_perfect_140k_local.py benchmark):
+    1. 150 Hz Low-Shelf (+1.8 dB baritone warmth and body)
     2. 70 Hz Butterworth HPF (clean cut of sub-bass rumble)
-    3. Smooth Studio Noise Gate (eliminates ambient background hiss in silence, zero consonant clipping)
+    3. 9500 Hz Butterworth LP cut (removes vocoder digital hiss beyond vocal range)
     4. True Peak Normalization (-1 dB / 0.89)
     """
-    # 1. Low shelf warmth (+1.6 dB)
-    gain = 10 ** (1.6 / 20.0)
+    # 1. Low shelf warmth (+1.8 dB)
+    gain = 10 ** (1.8 / 20.0)
     sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
     low_band = signal.sosfiltfilt(sos_low, wave)
     out = wave + (gain - 1.0) * low_band
@@ -244,31 +228,16 @@ def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
     out = signal.sosfiltfilt(sos_hp, out)
 
-    # 3. Smooth Studio Noise Gate (10ms attack, 220ms safe release preserving breath)
-    attack_coeff = np.exp(-1.0 / (0.010 * sr))
-    release_coeff = np.exp(-1.0 / (0.220 * sr))
-    env = np.zeros_like(out)
-    curr = 0.0
-    for i in range(len(out)):
-        a = abs(out[i])
-        if a > curr:
-            curr = a + attack_coeff * (curr - a)
-        else:
-            curr = a + release_coeff * (curr - a)
-        env[i] = curr
-
-    thresh = 0.0030
-    floor = 0.0006
-    gate_gain = np.clip((env - floor) / (thresh - floor), 0.0, 1.0)
-    gate_gain = 0.5 * (1.0 - np.cos(np.pi * gate_gain))
-    gated = out * gate_gain
+    # 3. High-cut LP filter (9500 Hz) — cleans high-frequency vocoder hiss
+    sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
+    out = signal.sosfiltfilt(sos_lp, out)
 
     # 4. Peak Limiter (-1 dB / 0.89)
-    peak = np.max(np.abs(gated))
+    peak = np.max(np.abs(out))
     if peak > 1e-5:
-        gated = gated * (0.89 / peak)
+        out = out * (0.89 / peak)
 
-    return gated.astype(np.float32)
+    return out.astype(np.float32)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -284,9 +253,9 @@ def handler(job: dict) -> dict:
     voice = job_input.get("voice", "classic").lower()
     style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
-    steps = int(job_input.get("steps", 48))
+    steps = int(job_input.get("steps", 32))
     fmt = job_input.get("format", "mp3").lower()
-    seed = job_input.get("seed", 42)
+    seed = job_input.get("seed", None)
 
     if seed is not None:
         torch.manual_seed(seed)
@@ -301,39 +270,26 @@ def handler(job: dict) -> dict:
     
     r_text = clean_text_strictly_for_vocab(profile["ref_text"], vocab_char_map)
 
-    # 1. Full Uzbek text normalization (numbers, dates, abbreviations, orthoepy, tutuq)
+    # 1. Full Uzbek text normalization (numbers, dates, abbreviations, orthoepy, dialect, tutuq)
     norm_text = normalize_uzbek_text(raw_text, style=style).lower()
-    norm_text = re.sub(r'\baudio', 'avdio', norm_text)
+    norm_text = re.sub(r'\baudio\b', 'avdio', norm_text)
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
-    norm_text = re.sub(r'\bit\b', 'ay ti', norm_text)
-    norm_text = re.sub(r'\bsentabr\b|\bsentyabr\b', 'sentiyabr', norm_text)
-    norm_text = re.sub(r'\boktyabr\b', 'oktabr', norm_text)
-    norm_text = re.sub(r'\bob[- ]havo\b', 'obhavo', norm_text)
-    norm_text = re.sub(r'\bsoha', 'sohha', norm_text)
-    norm_text = unicodedata.normalize('NFC', norm_text)
-    norm_text = re.sub(r"[`'ʻʼʽ՚’‘]", "'", norm_text)
-    norm_text = re.sub(r'\s+', ' ', norm_text).strip()
 
-    # 2. Natural sentence splitting
-    sentences = split_sentences_natural(norm_text, max_chars=220)
+    # 2. Strict Uzbek Vocabulary Filtering
+    clean_full_text = clean_text_strictly_for_vocab(norm_text, vocab_char_map)
 
-    # 3. Clean each sentence strictly for vocab characters
-    text_chunks = []
-    for s in sentences:
-        c = clean_text_strictly_for_vocab(s, vocab_char_map, style=style, already_normalized=True)
-        c = c.strip().strip('.').strip()
-        if c:
-            text_chunks.append(c)
-
+    # 3. Sentence Splitting (respects sentence flow, avoids unnatural midway breaks)
+    text_chunks = split_sentences_natural(clean_full_text, max_chars=240)
     if not text_chunks:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
-    # 4. Generate each full sentence with exact phonetic duration + terminal breath expansion
+    # 4. Generate each sentence with 32 steps (clean benchmark quality)
     generated_waves = []
+    fade = int(0.015 * target_sample_rate)
     for idx, clean_chunk in enumerate(text_chunks):
         chunk_for_model = clean_chunk + "."
-        dur_sec = calculate_phonetic_duration(chunk_for_model, is_terminal_sentence=True, speed_factor=effective_speed)
+        dur_sec = calculate_phonetic_duration(chunk_for_model, speed_factor=effective_speed)
         target_frames = int(dur_sec * target_sample_rate / hop_length)
         duration = ref_mel_len + target_frames
         full_text = [r_text + " " + chunk_for_model]
@@ -346,7 +302,7 @@ def handler(job: dict) -> dict:
                 steps=steps,
                 cfg_strength=1.55,
                 sway_sampling_coef=-1.0,
-                seed=(seed + idx) if seed is not None else None,
+                seed=seed if seed is not None else (200 + idx)
             )
             gen = gen.to(torch.float32)[:, ref_mel_len:, :].permute(0, 2, 1)
             mel_spec = gen.to(vocoder_device)
@@ -354,23 +310,24 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            generated_waves.append(wave_chunk)
+            # Smooth 15ms zero-crossing fade at sentence ending
+            chunk_wave = wave_chunk.astype(np.float32)
+            if len(chunk_wave) > fade:
+                chunk_wave[-fade:] *= np.linspace(1.0, 0.0, fade)
 
-    # 5. Natural In-Context Human Breath Stitching (safe_render_wave)
-    # Model generates real human breath decay at sentence ends — preserve it fully!
-    rendered_chunks = [safe_render_wave(w.astype(np.float32), sr=target_sample_rate) for w in generated_waves]
+            generated_waves.append(chunk_wave)
 
-    # Minimal 80ms breathing transition buffer between sentences
-    pause_samples = int(0.08 * target_sample_rate)
+    # 5. Natural 220ms pure silence pauses between sentences (100% black silence)
+    pause_samples = int(0.22 * target_sample_rate)
     final_pieces = []
-    for idx, c in enumerate(rendered_chunks):
+    for idx, c in enumerate(generated_waves):
         final_pieces.append(c)
-        if idx < len(rendered_chunks) - 1:
+        if idx < len(generated_waves) - 1:
             final_pieces.append(np.zeros(pause_samples, dtype=np.float32))
 
     full_audio = np.concatenate(final_pieces)
 
-    # 6. Apply Studio Master DSP (Baritone warmth + noise gate + peak norm)
+    # 6. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
     full_audio = apply_studio_master_dsp(full_audio, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
