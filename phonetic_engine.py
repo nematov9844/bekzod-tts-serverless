@@ -127,6 +127,13 @@ def calculate_phonetic_duration(text: str, is_terminal_sentence: bool = True, sp
                 if last_ch in "ptkqbdg" and first_ch in "ptkqbdg":
                     total_ms += 35 # Coarticulation mikro-pauzasi
                     
+    # Polysillabic and long agglutinative words buffer (protects suffixes like -lashtirilganlaringiz)
+    raw_char_count = len(re.sub(r'[^a-z]', '', clean_t))
+    if raw_char_count >= 18:
+        total_ms += 180
+    elif raw_char_count >= 12:
+        total_ms += 90
+
     # Gap oxiridagi silliq vokal so'nish vaqti
     total_ms += 140 if is_terminal_sentence else 80
 

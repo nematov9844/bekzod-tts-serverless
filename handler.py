@@ -234,12 +234,12 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
-def split_sentences_natural(text: str, max_chars: int = 110) -> List[str]:
+def split_sentences_natural(text: str, max_chars: int = 100, word_max_chars: int = 70) -> List[str]:
     """
     Splits text strictly by sentence boundaries (.!? or newlines \n).
     If any block > max_chars, splits by clauses (, ; :).
-    If still > max_chars (e.g. unpunctuated wall of text), splits by words!
-    Guarantees no single chunk ever exceeds max_chars.
+    If still > max_chars (e.g. unpunctuated wall of text), splits by words with word_max_chars!
+    Guarantees no single chunk ever exceeds safe diffusion horizon.
     """
     raw_blocks = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', text) if s.strip()]
     if not raw_blocks:
@@ -261,7 +261,7 @@ def split_sentences_natural(text: str, max_chars: int = 110) -> List[str]:
             words = clause.split()
             current = ""
             for w in words:
-                if len(current) + len(w) + 1 <= max_chars:
+                if len(current) + len(w) + 1 <= word_max_chars:
                     current = f"{current} {w}".strip()
                 else:
                     if current:
@@ -340,8 +340,8 @@ def handler(job: dict) -> dict:
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
 
-    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses, max 110 chars)
-    raw_sentences = split_sentences_natural(norm_text, max_chars=110)
+    # 2. Sentence Splitting strictly by sentence boundaries (keeps commas inside clauses, safe word chunks <= 70 chars)
+    raw_sentences = split_sentences_natural(norm_text, max_chars=100, word_max_chars=70)
     if not raw_sentences:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 

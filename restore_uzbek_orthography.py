@@ -417,5 +417,7 @@ def restore_orthography(text: str) -> str:
     t = re.sub(r"o[']", "o'", t, flags=re.IGNORECASE)
     t = re.sub(r"g[']", "g'", t, flags=re.IGNORECASE)
     t = re.sub(r"'+", "'", t)
-    t = re.sub(r"\s+", " ", t).strip()
+    # Satrlar ichidagi probellarni tozalash, lekin yangi qatorlarni (\n) qat'iy saqlash
+    lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in t.split('\n')]
+    t = '\n'.join(l for l in lines if l).strip()
     return t

@@ -117,7 +117,9 @@ def normalize_numbers(text: str) -> str:
 
     # Oddiy raqamlar: 123 -> bir yuz yigirma uch
     text = re.sub(r'\b\d+\b', lambda m: f" {integer_to_uzbek(int(m.group(0)))} ", text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Satrlar ichidagi probellarni tozalash, lekin yangi qatorlarni (\n) saqlash
+    lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in text.split('\n')]
+    text = '\n'.join(l for l in lines if l).strip()
     
     return text
 
