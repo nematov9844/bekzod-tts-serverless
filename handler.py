@@ -42,19 +42,6 @@ HF_TOKEN = os.environ.get("HF_TOKEN", None)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
 
-# Initialize DeepFilterNet 3 for AI Studio Master pass
-try:
-    from df.enhance import enhance, init_df
-    print("[*] Initializing DeepFilterNet 3 for studio AI noise elimination...")
-    model_df, df_state, _ = init_df()
-    df_sr = df_state.sr()
-    HAS_DEEPFILTER = True
-    print("[+] DeepFilterNet 3 initialized successfully.")
-except Exception as _df_err:
-    print(f"[!] DeepFilterNet 3 not available ({_df_err}), using studio DSP filter.")
-    HAS_DEEPFILTER = False
-    model_df, df_state, df_sr = None, None, 24000
-
 def get_file(filename: str) -> str:
     local_p = os.path.join(MODEL_DIR, filename)
     if os.path.exists(local_p):
@@ -358,26 +345,7 @@ def handler(job: dict) -> dict:
 
     full_audio = np.concatenate(final_pieces)
 
-    # 6. Apply DeepFilterNet 3 AI Studio Master Pass (if available)
-    if HAS_DEEPFILTER and model_df is not None:
-        try:
-            w_t = torch.from_numpy(full_audio).unsqueeze(0).float()
-            if target_sample_rate != df_sr:
-                w_df_in = torchaudio.transforms.Resample(target_sample_rate, df_sr)(w_t)
-            else:
-                w_df_in = w_t
-
-            with torch.no_grad():
-                w_df_out = enhance(model_df, df_state, w_df_in)
-
-            if df_sr != target_sample_rate:
-                full_audio = torchaudio.transforms.Resample(df_sr, target_sample_rate)(w_df_out).squeeze().cpu().numpy()
-            else:
-                full_audio = w_df_out.squeeze().cpu().numpy()
-        except Exception as e:
-            print(f"[!] DeepFilterNet enhancement error: {e}")
-
-    # 7. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
+    # 6. Apply Studio Master DSP (150Hz Baritone warmth + 9500Hz cut + peak norm)
     full_audio = apply_studio_master_dsp(full_audio, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 

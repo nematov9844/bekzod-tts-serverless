@@ -14,7 +14,7 @@ fi
 
 # 2. Python dependencies
 echo "[*] Ensuring Python packages..."
-pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts DeepFilterNet
+pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts
 
 # 3. Fetch latest 1-to-1 pipeline modules from GitHub
 echo "[*] Fetching latest pipeline modules from GitHub..."
