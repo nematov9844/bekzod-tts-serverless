@@ -155,9 +155,9 @@ VOICE_PROFILES = {
     },
     "melancholic": {
         "audio": melancholic_audio,
-        "ref_text": "yangilangan konvensiya bir ming to'qqiz yuz to'qson to'qqizinchi yilda qabul qilingan.",
+        "ref_text": "yangilangan konvensiya to'qson to'qqizinchi yilda qabul qilingan.",
         "mel_len": melancholic_len,
-        "speed_factor": 0.96,
+        "speed_factor": 0.88,
     }
 }
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
