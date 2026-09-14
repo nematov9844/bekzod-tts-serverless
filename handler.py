@@ -210,42 +210,21 @@ def split_sentences_natural(text: str, max_chars: int = 220) -> List[str]:
 
     return chunks
 
-def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 40, pad_tail_ms: int = 150) -> np.ndarray:
+def safe_render_wave(raw_wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     """
-    Cuts empty vocoder air and latency at beginning and end of each chunk,
-    while strictly preserving consonants and trailing release decay (-di, -da, -gan).
-    5ms cosine micro-fade eliminates clicks.
+    Strictly preserves Bekzod's real in-context breath decay at sentence endings.
+    Applies gentle 4ms micro-fade at onset and smooth 35ms cosine zero-crossing decay.
     """
-    if len(wave) < int(0.08 * sr):
-        return wave
+    out = raw_wave.copy()
+    micro_fade = int(0.004 * sr)
+    if len(out) > micro_fade:
+        out[:micro_fade] *= np.linspace(0.2, 1.0, micro_fade)
 
-    frame_len = int(0.015 * sr)
-    hop_len = int(0.005 * sr)
-    n_frames = (len(wave) - frame_len) // hop_len + 1
-    if n_frames < 3:
-        return wave
+    fade_end = int(0.035 * sr)
+    if len(out) > fade_end:
+        out[-fade_end:] *= (1.0 + np.cos(np.linspace(0, np.pi, fade_end))) / 2.0
 
-    rms = np.array([
-        np.sqrt(np.mean(wave[i * hop_len : i * hop_len + frame_len] ** 2))
-        for i in range(n_frames)
-    ])
-    noise_floor = np.percentile(rms, 15)
-    thresh = max(0.0025, noise_floor * 1.15)
-    active = np.where(rms > thresh)[0]
-    if len(active) == 0:
-        return wave
-
-    lead_sample = max(0, int((active[0] * hop_len) - (pad_lead_ms / 1000.0 * sr)))
-    tail_sample = min(len(wave), int(((active[-1] * hop_len) + frame_len) + (pad_tail_ms / 1000.0 * sr)))
-    trimmed = wave[lead_sample:tail_sample].copy()
-
-    # 5ms cosine crossfade
-    fade = int(0.005 * sr)
-    if len(trimmed) > 2 * fade and fade > 0:
-        t = np.linspace(0, np.pi / 2, fade).astype(np.float32)
-        trimmed[:fade] *= np.sin(t)
-        trimmed[-fade:] *= np.cos(t)
-    return trimmed
+    return out
 
 def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     """
@@ -265,9 +244,9 @@ def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
     sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
     out = signal.sosfiltfilt(sos_hp, out)
 
-    # 3. Smooth Studio Noise Gate (10ms attack, 200ms safe release to preserve soft vowels)
+    # 3. Smooth Studio Noise Gate (10ms attack, 220ms safe release preserving breath)
     attack_coeff = np.exp(-1.0 / (0.010 * sr))
-    release_coeff = np.exp(-1.0 / (0.200 * sr))
+    release_coeff = np.exp(-1.0 / (0.220 * sr))
     env = np.zeros_like(out)
     curr = 0.0
     for i in range(len(out)):
@@ -278,8 +257,8 @@ def apply_studio_master_dsp(wave: np.ndarray, sr: int = 24000) -> np.ndarray:
             curr = a + release_coeff * (curr - a)
         env[i] = curr
 
-    thresh = 0.0035
-    floor = 0.0008
+    thresh = 0.0030
+    floor = 0.0006
     gate_gain = np.clip((env - floor) / (thresh - floor), 0.0, 1.0)
     gate_gain = 0.5 * (1.0 - np.cos(np.pi * gate_gain))
     gated = out * gate_gain
@@ -350,11 +329,11 @@ def handler(job: dict) -> dict:
     if not text_chunks:
         return {"error": "Matn tozalangandan so'ng bo'sh qoldi", "status": "FAILED"}
 
-    # 4. Generate each full sentence with exact phonetic duration
+    # 4. Generate each full sentence with exact phonetic duration + terminal breath expansion
     generated_waves = []
     for idx, clean_chunk in enumerate(text_chunks):
         chunk_for_model = clean_chunk + "."
-        dur_sec = calculate_phonetic_duration(chunk_for_model, speed_factor=effective_speed)
+        dur_sec = calculate_phonetic_duration(chunk_for_model, is_terminal_sentence=True, speed_factor=effective_speed)
         target_frames = int(dur_sec * target_sample_rate / hop_length)
         duration = ref_mel_len + target_frames
         full_text = [r_text + " " + chunk_for_model]
@@ -377,21 +356,16 @@ def handler(job: dict) -> dict:
 
             generated_waves.append(wave_chunk)
 
-    # 5. Speech Bounds Trimming & Natural Breath Pauses (Unbroken Studio Stitching)
-    n_chunks = len(generated_waves)
-    cleaned_chunks = []
-    for idx, c in enumerate(generated_waves):
-        is_last = (idx == n_chunks - 1)
-        tail_ms = 180 if is_last else 140
-        c_clean = clean_speech_bounds(c.astype(np.float32), sr=target_sample_rate, pad_lead_ms=40, pad_tail_ms=tail_ms)
-        cleaned_chunks.append(c_clean)
+    # 5. Natural In-Context Human Breath Stitching (safe_render_wave)
+    # Model generates real human breath decay at sentence ends — preserve it fully!
+    rendered_chunks = [safe_render_wave(w.astype(np.float32), sr=target_sample_rate) for w in generated_waves]
 
-    # 200ms natural studio pause between sentences (seamless flow, no awkward gaps)
-    pause_samples = int(0.20 * target_sample_rate)
+    # Minimal 80ms breathing transition buffer between sentences
+    pause_samples = int(0.08 * target_sample_rate)
     final_pieces = []
-    for idx, c in enumerate(cleaned_chunks):
+    for idx, c in enumerate(rendered_chunks):
         final_pieces.append(c)
-        if idx < n_chunks - 1:
+        if idx < len(rendered_chunks) - 1:
             final_pieces.append(np.zeros(pause_samples, dtype=np.float32))
 
     full_audio = np.concatenate(final_pieces)
