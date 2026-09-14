@@ -6,14 +6,14 @@ Ushbu endpoint **RunPod Serverless** platformasida ishga tushirilgan bo'lib, **P
 
 ## 🚀 Endpoint Ma'lumotlari
 
-- **Endpoint ID:** `brpr0c2l9ia4y8`
+- **Endpoint ID:** `pz1f73i1e7dd58`
 - **GPU:** NVIDIA GeForce RTX 4090 (24GB VRAM)
 - **Min Workers:** `0` (Avtomatik 0 ga tushadi, bo'sh turganda xarajat 0)
 - **Max Workers:** `2`
 - **Idle Timeout:** `120s` (2 daqiqa harakatsizlikdan so'ng to'xtaydi)
-- **Sync URL (`/runsync`):** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/runsync`
-- **Async URL (`/run`):** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/run`
-- **Status URL:** `https://api.runpod.ai/v2/brpr0c2l9ia4y8/status/<JOB_ID>`
+- **Sync URL (`/runsync`):** `https://api.runpod.ai/v2/pz1f73i1e7dd58/runsync`
+- **Async URL (`/run`):** `https://api.runpod.ai/v2/pz1f73i1e7dd58/run`
+- **Status URL:** `https://api.runpod.ai/v2/pz1f73i1e7dd58/status/<JOB_ID>`
 
 ---
 
@@ -79,7 +79,7 @@ Content-Type: application/json
 ```javascript
 async function synthesizeVoice(text, voice = "modern") {
   const RUNPOD_API_KEY = "rpa_..."; // RunPod API Key
-  const ENDPOINT_ID = "brpr0c2l9ia4y8";
+  const ENDPOINT_ID = "pz1f73i1e7dd58";
 
   const response = await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/runsync`, {
     method: "POST",
@@ -113,7 +113,7 @@ async function synthesizeVoice(text, voice = "modern") {
 ### 2. cURL orqali sinash
 
 ```bash
-curl -X POST "https://api.runpod.ai/v2/brpr0c2l9ia4y8/runsync" \
+curl -X POST "https://api.runpod.ai/v2/pz1f73i1e7dd58/runsync" \
   -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
