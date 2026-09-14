@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
-echo "[*] Starting Bekzod TTS Serverless Worker Bootstrap..."
+echo "=========================================="
+echo "[*] BEKZOD TTS SERVERLESS WORKER BOOTSTRAP"
+echo "=========================================="
+echo "Time: $(date)"
 
-# 1. Dependencies
-if [ ! -f /tmp/installed.flag ]; then
+# 1. ffmpeg
+if ! command -v ffmpeg &> /dev/null; then
     echo "[*] Installing ffmpeg..."
     apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null 2>&1 || true
-    echo "[*] Installing Python packages..."
-    pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts
-    touch /tmp/installed.flag
-    echo "[✓] Environment ready."
 fi
 
-# 2. Fetch latest handler
-echo "[*] Fetching handler.py..."
+# 2. python dependencies
+echo "[*] Ensuring Python packages..."
+pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts
+
+# 3. download latest handler.py
+echo "[*] Fetching handler.py from GitHub..."
 curl -sSfL https://raw.githubusercontent.com/nematov9844/bekzod-tts-serverless/main/handler.py -o /handler.py
 
-# 3. Start handler
-echo "[*] Launching handler..."
-exec python -u /handler.py
+# 4. launch handler
+echo "[*] Launching handler.py with Python..."
+exec python3 -u /handler.py
