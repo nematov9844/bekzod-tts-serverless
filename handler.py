@@ -122,6 +122,9 @@ inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav",
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
 melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v5_pure.wav", fallback="clean_ref_classic_baritone.wav")
 epic_audio, epic_len = load_anchor("ref_epic_v1_pure.wav", fallback="clean_ref_modern_active.wav")
+mysterious_audio, mysterious_len = load_anchor("ref_mysterious_v1_pure.wav", fallback="clean_ref_classic_baritone.wav")
+authoritative_audio, authoritative_len = load_anchor("ref_authoritative_v1_pure.wav", fallback="clean_ref_classic_baritone.wav")
+ironic_audio, ironic_len = load_anchor("ref_ironic_v1_pure.wav", fallback="clean_ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -168,9 +171,9 @@ VOICE_PROFILES = {
         "audio": melancholic_audio,
         "ref_text": "tashqi savdoni soddalashtirishga xizmat qilmoqda.",
         "mel_len": melancholic_len,
-        "speed_factor": 0.86,
-        "pause_ms": 0.44,
-        "cfg_strength": 1.42,
+        "speed_factor": 0.74,
+        "pause_ms": 0.55,
+        "cfg_strength": 1.35,
     },
     "epic": {
         "audio": epic_audio,
@@ -179,8 +182,37 @@ VOICE_PROFILES = {
         "speed_factor": 0.94,
         "pause_ms": 0.38,
         "cfg_strength": 1.60,
+    },
+    "mysterious": {
+        "audio": mysterious_audio,
+        "ref_text": "konvensiyaning asosiy maqsadi etib bojxona tartib taomillarini soddalashtirish.",
+        "mel_len": mysterious_len,
+        "speed_factor": 0.82,
+        "pause_ms": 0.48,
+        "cfg_strength": 1.35,
+    },
+    "authoritative": {
+        "audio": authoritative_audio,
+        "ref_text": "yo'q ayrim harakatlarga qonunchilikda ruxsat berilgan.",
+        "mel_len": authoritative_len,
+        "speed_factor": 0.98,
+        "pause_ms": 0.22,
+        "cfg_strength": 1.65,
+    },
+    "ironic": {
+        "audio": ironic_audio,
+        "ref_text": "nega bu qadar ko'p talablar bor bu talablar davlat tomonidan shunchaki o'rnatilmagan.",
+        "mel_len": ironic_len,
+        "speed_factor": 0.95,
+        "pause_ms": 0.32,
+        "cfg_strength": 1.55,
     }
 }
+# Uzbek and semantic aliases
+VOICE_PROFILES["vazmin"] = VOICE_PROFILES["classic"]
+VOICE_PROFILES["podkast"] = VOICE_PROFILES["modern"]
+VOICE_PROFILES["ertakchi"] = VOICE_PROFILES["storyteller"]
+VOICE_PROFILES["savol"] = VOICE_PROFILES["inquisitive"]
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
 VOICE_PROFILES["shodiyona"] = VOICE_PROFILES["cheerful"]
 VOICE_PROFILES["gamgin"] = VOICE_PROFILES["melancholic"]
@@ -188,8 +220,15 @@ VOICE_PROFILES["mayus"] = VOICE_PROFILES["melancholic"]
 VOICE_PROFILES["dramatic"] = VOICE_PROFILES["melancholic"]
 VOICE_PROFILES["tantanavor"] = VOICE_PROFILES["epic"]
 VOICE_PROFILES["shijoatli"] = VOICE_PROFILES["epic"]
+VOICE_PROFILES["sirli"] = VOICE_PROFILES["mysterious"]
+VOICE_PROFILES["pinhona"] = VOICE_PROFILES["mysterious"]
+VOICE_PROFILES["qatiy"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["qat'iy"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["buyruq"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["kinoyali"] = VOICE_PROFILES["ironic"]
+VOICE_PROFILES["sarkazm"] = VOICE_PROFILES["ironic"]
 
-print(f"[✓] Bekzod TTS Engine (7 emotion profiles) initialized successfully on {DEVICE}!")
+print(f"[✓] Bekzod TTS Engine (10 Expressive Styles Matrix) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
@@ -364,13 +403,13 @@ def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -
     out = wave.copy().astype(np.float32)
 
     if voice in ["melancholic", "gamgin", "mayus", "dramatic"]:
-        # 1. Darker resonance: gentle Butterworth low-pass rolloff at 5200 Hz
-        sos_lp = signal.butter(2, 5200, 'lp', fs=sr, output='sos')
+        # 1. Darker resonance: gentle low-pass rolloff at 4800 Hz
+        sos_lp = signal.butter(2, 4800, 'lp', fs=sr, output='sos')
         out = signal.sosfiltfilt(sos_lp, out)
 
-        # 2. Chest sorrow warmth: +2.2 dB at 200 Hz
-        gain = 10 ** (2.2 / 20.0)
-        sos_warm = signal.butter(2, 200, 'lp', fs=sr, output='sos')
+        # 2. Chest sorrow warmth: +2.5 dB at 180 Hz
+        gain = 10 ** (2.5 / 20.0)
+        sos_warm = signal.butter(2, 180, 'lp', fs=sr, output='sos')
         low_band = signal.sosfiltfilt(sos_warm, out)
         out = out + (gain - 1.0) * low_band
 
@@ -378,10 +417,66 @@ def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -
         sos_hp = signal.butter(2, 65, 'hp', fs=sr, output='sos')
         out = signal.sosfiltfilt(sos_hp, out)
 
-        # 4. Low energy (intimate, subdued sorrow): Peak limited to 0.70 (-3.1 dBFS)
+        # 4. Low energy (intimate, truly quiet & subdued sorrow): Peak limited to 0.65 (-3.7 dBFS)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
-            out = out * (0.70 / peak)
+            out = out * (0.65 / peak)
+
+    elif voice in ["mysterious", "sirli", "pinhona"]:
+        # 1. Hushed whisper tone & close-mic effect: soft rolloff at 5600 Hz
+        sos_lp = signal.butter(2, 5600, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        # 2. Intimate proximity resonance: +1.6 dB at 160 Hz
+        gain = 10 ** (1.6 / 20.0)
+        sos_warm = signal.butter(2, 160, 'lp', fs=sr, output='sos')
+        low_band = signal.sosfiltfilt(sos_warm, out)
+        out = out + (gain - 1.0) * low_band
+
+        # 3. Tight low cut: 80 Hz HPF
+        sos_hp = signal.butter(2, 80, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 4. Whisper level peak: 0.62 (-4.1 dBFS)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.62 / peak)
+
+    elif voice in ["authoritative", "qatiy", "qat'iy", "buyruq"]:
+        # 1. Crisp consonants & attack: +2.2 dB at 2500 Hz presence
+        gain_pres = 10 ** (2.2 / 20.0)
+        sos_pres = signal.butter(2, 2500, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_pres, out)
+        out = out + (gain_pres - 1.0) * high_band
+
+        # 2. Tight low-end: 80 Hz HPF
+        sos_hp = signal.butter(2, 80, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 3. Controlled ceiling: 9500 Hz LP
+        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        # 4. Authoritative firm peak: 0.92 (-0.7 dBFS)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.92 / peak)
+
+    elif voice in ["ironic", "kinoyali", "sarkazm"]:
+        # 1. Smirking presence boost: +1.6 dB at 3500 Hz
+        gain_smirk = 10 ** (1.6 / 20.0)
+        sos_smirk = signal.butter(2, 3500, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_smirk, out)
+        out = out + (gain_smirk - 1.0) * high_band
+
+        # 2. Sub-bass cut: 75 Hz HPF
+        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 3. Dynamic peak: 0.86 (-1.3 dBFS)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.86 / peak)
 
     elif voice in ["cheerful", "quvnoq", "shodiyona"]:
         # 1. Bright smiling presence: +1.8 dB at 3200 Hz
@@ -403,7 +498,7 @@ def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -
         if peak > 1e-5:
             out = out * (0.92 / peak)
 
-    elif voice == "storyteller":
+    elif voice in ["storyteller", "ertakchi"]:
         # 1. Soft warm resonance: +2.0 dB at 180 Hz
         gain = 10 ** (2.0 / 20.0)
         sos_warm = signal.butter(2, 180, 'lp', fs=sr, output='sos')
@@ -449,8 +544,40 @@ def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -
         if peak > 1e-5:
             out = out * (0.95 / peak)
 
+    elif voice in ["modern", "podkast"]:
+        gain_pres = 10 ** (1.2 / 20.0)
+        sos_pres = signal.butter(2, 2500, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_pres, out)
+        out = out + (gain_pres - 1.0) * high_band
+
+        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.90 / peak)
+
+    elif voice in ["inquisitive", "savol"]:
+        gain_pres = 10 ** (1.5 / 20.0)
+        sos_pres = signal.butter(2, 3000, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_pres, out)
+        out = out + (gain_pres - 1.0) * high_band
+
+        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.88 / peak)
+
     else:
-        # Classic / Modern / Inquisitive standard broadcast DSP
+        # Classic / Vazmin standard broadcast DSP
         gain = 10 ** (1.8 / 20.0)
         sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
         low_band = signal.sosfiltfilt(sos_low, out)
