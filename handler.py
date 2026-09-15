@@ -171,40 +171,40 @@ VOICE_PROFILES = {
         "audio": melancholic_audio,
         "ref_text": "tashqi savdoni soddalashtirishga xizmat qilmoqda.",
         "mel_len": melancholic_len,
-        "speed_factor": 0.74,
-        "pause_ms": 0.55,
-        "cfg_strength": 1.35,
+        "speed_factor": 0.88,
+        "pause_ms": 0.45,
+        "cfg_strength": 1.45,
     },
     "epic": {
         "audio": epic_audio,
         "ref_text": "shuning uchun bojxona nazorati davlatning iqtisodiy xavfsizligini ta'minlovchi muhim vositalardan biri hisoblanadi.",
         "mel_len": epic_len,
-        "speed_factor": 0.94,
-        "pause_ms": 0.38,
+        "speed_factor": 0.96,
+        "pause_ms": 0.30,
         "cfg_strength": 1.60,
     },
     "mysterious": {
         "audio": mysterious_audio,
         "ref_text": "konvensiyaning asosiy maqsadi etib bojxona tartib taomillarini soddalashtirish.",
         "mel_len": mysterious_len,
-        "speed_factor": 0.82,
-        "pause_ms": 0.48,
-        "cfg_strength": 1.35,
+        "speed_factor": 0.91,
+        "pause_ms": 0.42,
+        "cfg_strength": 1.45,
     },
     "authoritative": {
         "audio": authoritative_audio,
         "ref_text": "yo'q ayrim harakatlarga qonunchilikda ruxsat berilgan.",
         "mel_len": authoritative_len,
         "speed_factor": 0.98,
-        "pause_ms": 0.22,
+        "pause_ms": 0.20,
         "cfg_strength": 1.65,
     },
     "ironic": {
         "audio": ironic_audio,
         "ref_text": "nega bu qadar ko'p talablar bor bu talablar davlat tomonidan shunchaki o'rnatilmagan.",
         "mel_len": ironic_len,
-        "speed_factor": 0.95,
-        "pause_ms": 0.32,
+        "speed_factor": 0.97,
+        "pause_ms": 0.28,
         "cfg_strength": 1.55,
     }
 }
@@ -395,200 +395,117 @@ def split_sentences_natural(text: str, max_chars: int = 100, word_max_chars: int
 
     return chunks
 
+def biquad_peak(wave: np.ndarray, fs: int, freq: float, gain_db: float, q: float = 1.0) -> np.ndarray:
+    """Standard Audio EQ Cookbook Peaking Filter (transparent bell EQ)."""
+    A = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * np.pi * freq / fs
+    alpha = np.sin(w0) / (2.0 * q)
+    b0 = 1.0 + alpha * A
+    b1 = -2.0 * np.cos(w0)
+    b2 = 1.0 - alpha * A
+    a0 = 1.0 + alpha / A
+    a1 = -2.0 * np.cos(w0)
+    a2 = 1.0 - alpha / A
+    b = np.array([b0, b1, b2], dtype=np.float64) / a0
+    a = np.array([a0, a1, a2], dtype=np.float64) / a0
+    return signal.lfilter(b, a, wave.astype(np.float64)).astype(np.float32)
+
+def biquad_highshelf(wave: np.ndarray, fs: int, freq: float, gain_db: float) -> np.ndarray:
+    """Standard Audio EQ Cookbook High Shelf Filter (gentle air polish / softening)."""
+    A = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * np.pi * freq / fs
+    alpha = np.sin(w0) / 2.0 * np.sqrt(2.0)
+    cos_w0 = np.cos(w0)
+    b0 = A * ((A + 1.0) + (A - 1.0) * cos_w0 + 2.0 * np.sqrt(A) * alpha)
+    b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cos_w0)
+    b2 = A * ((A + 1.0) + (A - 1.0) * cos_w0 - 2.0 * np.sqrt(A) * alpha)
+    a0 = (A + 1.0) - (A - 1.0) * cos_w0 + 2.0 * np.sqrt(A) * alpha
+    a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cos_w0)
+    a2 = (A + 1.0) - (A - 1.0) * cos_w0 - 2.0 * np.sqrt(A) * alpha
+    b = np.array([b0, b1, b2], dtype=np.float64) / a0
+    a = np.array([a0, a1, a2], dtype=np.float64) / a0
+    return signal.lfilter(b, a, wave.astype(np.float64)).astype(np.float32)
+
 def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -> np.ndarray:
     """
-    Expressive Style Master Filter Engine
-    Applies tailored acoustic, spectral, resonance, and energy shaping per style.
+    Studio-Grade Transparent Mastering EQ Engine
+    Preserves 100% full-bandwidth speech fidelity (up to 12 kHz), crystal clear consonants, and zero muffling.
     """
     out = wave.copy().astype(np.float32)
 
+    # 1. Clean sub-bass rumble (< 65 Hz) for all styles
+    sos_hp = signal.butter(2, 65, 'hp', fs=sr, output='sos')
+    out = signal.sosfiltfilt(sos_hp, out)
+
     if voice in ["melancholic", "gamgin", "mayus", "dramatic"]:
-        # 1. Darker resonance: gentle low-pass rolloff at 4800 Hz
-        sos_lp = signal.butter(2, 4800, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 2. Chest sorrow warmth: +2.5 dB at 180 Hz
-        gain = 10 ** (2.5 / 20.0)
-        sos_warm = signal.butter(2, 180, 'lp', fs=sr, output='sos')
-        low_band = signal.sosfiltfilt(sos_warm, out)
-        out = out + (gain - 1.0) * low_band
-
-        # 3. Sub-bass rumble cut: 65 Hz HPF
-        sos_hp = signal.butter(2, 65, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 4. Low energy (intimate, truly quiet & subdued sorrow): Peak limited to 0.65 (-3.7 dBFS)
+        # Warm chest sadness (+1.2 dB @ 200 Hz) + gentle top softening (-1.5 dB shelf @ 7000 Hz, zero lowpass)
+        out = biquad_peak(out, sr, 200, 1.2, q=1.0)
+        out = biquad_highshelf(out, sr, 7000, -1.5)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
-            out = out * (0.65 / peak)
+            out = out * (0.82 / peak)
 
     elif voice in ["mysterious", "sirli", "pinhona"]:
-        # 1. Hushed whisper tone & close-mic effect: soft rolloff at 5600 Hz
-        sos_lp = signal.butter(2, 5600, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 2. Intimate proximity resonance: +1.6 dB at 160 Hz
-        gain = 10 ** (1.6 / 20.0)
-        sos_warm = signal.butter(2, 160, 'lp', fs=sr, output='sos')
-        low_band = signal.sosfiltfilt(sos_warm, out)
-        out = out + (gain - 1.0) * low_band
-
-        # 3. Tight low cut: 80 Hz HPF
-        sos_hp = signal.butter(2, 80, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 4. Whisper level peak: 0.62 (-4.1 dBFS)
+        # Intimate proximity (+1.0 dB @ 180 Hz) + gentle air softening (-1.8 dB shelf @ 6500 Hz)
+        out = biquad_peak(out, sr, 180, 1.0, q=1.0)
+        out = biquad_highshelf(out, sr, 6500, -1.8)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
-            out = out * (0.62 / peak)
+            out = out * (0.78 / peak)
 
-    elif voice in ["authoritative", "qatiy", "qat'iy", "buyruq"]:
-        # 1. Crisp consonants & attack: +2.2 dB at 2500 Hz presence
-        gain_pres = 10 ** (2.2 / 20.0)
-        sos_pres = signal.butter(2, 2500, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_pres, out)
-        out = out + (gain_pres - 1.0) * high_band
+    elif voice in ["epic", "tantanavor", "shijoatli"]:
+        # Resonant chest power (+1.5 dB @ 200 Hz) + crisp brilliance (+1.8 dB @ 3500 Hz)
+        out = biquad_peak(out, sr, 200, 1.5, q=1.0)
+        out = biquad_peak(out, sr, 3500, 1.8, q=1.2)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.95 / peak)
 
-        # 2. Tight low-end: 80 Hz HPF
-        sos_hp = signal.butter(2, 80, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 3. Controlled ceiling: 9500 Hz LP
-        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 4. Authoritative firm peak: 0.92 (-0.7 dBFS)
+    elif voice in ["cheerful", "quvnoq", "shodiyona"]:
+        # Smiling clarity (+1.8 dB @ 3600 Hz)
+        out = biquad_peak(out, sr, 3600, 1.8, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.92 / peak)
 
-    elif voice in ["ironic", "kinoyali", "sarkazm"]:
-        # 1. Smirking presence boost: +1.6 dB at 3500 Hz
-        gain_smirk = 10 ** (1.6 / 20.0)
-        sos_smirk = signal.butter(2, 3500, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_smirk, out)
-        out = out + (gain_smirk - 1.0) * high_band
-
-        # 2. Sub-bass cut: 75 Hz HPF
-        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 3. Dynamic peak: 0.86 (-1.3 dBFS)
-        peak = np.max(np.abs(out))
-        if peak > 1e-5:
-            out = out * (0.86 / peak)
-
-    elif voice in ["cheerful", "quvnoq", "shodiyona"]:
-        # 1. Bright smiling presence: +1.8 dB at 3200 Hz
-        gain = 10 ** (1.8 / 20.0)
-        sos_high = signal.butter(2, 3200, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_high, out)
-        out = out + (gain - 1.0) * high_band
-
-        # 2. Open air cut at 10500 Hz
-        sos_lp = signal.butter(2, 10500, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 3. Sub-bass cut 90 Hz
-        sos_hp = signal.butter(2, 90, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 4. High energy peak: 0.92
+    elif voice in ["authoritative", "qatiy", "qat'iy", "buyruq"]:
+        # Sharp articulation (+2.0 dB @ 2800 Hz)
+        out = biquad_peak(out, sr, 2800, 2.0, q=1.1)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.92 / peak)
 
     elif voice in ["storyteller", "ertakchi"]:
-        # 1. Soft warm resonance: +2.0 dB at 180 Hz
-        gain = 10 ** (2.0 / 20.0)
-        sos_warm = signal.butter(2, 180, 'lp', fs=sr, output='sos')
-        low_band = signal.sosfiltfilt(sos_warm, out)
-        out = out + (gain - 1.0) * low_band
-
-        # 2. Soft highs (8000 Hz)
-        sos_lp = signal.butter(2, 8000, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 3. Sub-bass cut 75 Hz
-        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 4. Medium-low energy peak: 0.82
+        # Velvet warmth (+1.5 dB @ 220 Hz)
+        out = biquad_peak(out, sr, 220, 1.5, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
-            out = out * (0.82 / peak)
+            out = out * (0.86 / peak)
 
-    elif voice in ["epic", "tantanavor", "shijoatli"]:
-        # 1. Powerful chest resonance projection: +1.8 dB at 200 Hz
-        gain_chest = 10 ** (1.8 / 20.0)
-        sos_chest = signal.butter(2, 200, 'lp', fs=sr, output='sos')
-        low_band = signal.sosfiltfilt(sos_chest, out)
-        out = out + (gain_chest - 1.0) * low_band
-
-        # 2. Resonant high presence & clarity: +2.0 dB at 3000 Hz
-        gain_pres = 10 ** (2.0 / 20.0)
-        sos_pres = signal.butter(2, 3000, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_pres, out)
-        out = out + (gain_pres - 1.0) * high_band
-
-        # 3. Sub-bass rumble cut: 70 Hz HPF
-        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        # 4. Clean air ceiling: 10000 Hz LP
-        sos_lp = signal.butter(2, 10000, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
-        # 5. Full projected energy peak: 0.95 (0 dB headroom)
+    elif voice in ["ironic", "kinoyali", "sarkazm"]:
+        # Smirking presence (+1.4 dB @ 3200 Hz)
+        out = biquad_peak(out, sr, 3200, 1.4, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
-            out = out * (0.95 / peak)
+            out = out * (0.88 / peak)
 
     elif voice in ["modern", "podkast"]:
-        gain_pres = 10 ** (1.2 / 20.0)
-        sos_pres = signal.butter(2, 2500, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_pres, out)
-        out = out + (gain_pres - 1.0) * high_band
-
-        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
+        # Punchy podcast presence (+1.2 dB @ 2600 Hz)
+        out = biquad_peak(out, sr, 2600, 1.2, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.90 / peak)
 
     elif voice in ["inquisitive", "savol"]:
-        gain_pres = 10 ** (1.5 / 20.0)
-        sos_pres = signal.butter(2, 3000, 'hp', fs=sr, output='sos')
-        high_band = signal.sosfiltfilt(sos_pres, out)
-        out = out + (gain_pres - 1.0) * high_band
-
-        sos_hp = signal.butter(2, 75, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
+        # Question clarity (+1.4 dB @ 3000 Hz)
+        out = biquad_peak(out, sr, 3000, 1.4, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.88 / peak)
 
     else:
-        # Classic / Vazmin standard broadcast DSP
-        gain = 10 ** (1.8 / 20.0)
-        sos_low = signal.butter(2, 150, 'lp', fs=sr, output='sos')
-        low_band = signal.sosfiltfilt(sos_low, out)
-        out = out + (gain - 1.0) * low_band
-
-        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_hp, out)
-
-        sos_lp = signal.butter(2, 9500, 'lp', fs=sr, output='sos')
-        out = signal.sosfiltfilt(sos_lp, out)
-
+        # Classic / Vazmin: natural balanced baritone (+1.2 dB @ 180 Hz)
+        out = biquad_peak(out, sr, 180, 1.2, q=1.0)
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.89 / peak)
