@@ -121,6 +121,7 @@ storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav",
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
 cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
 melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v5_pure.wav", fallback="clean_ref_classic_baritone.wav")
+epic_audio, epic_len = load_anchor("ref_epic_v1_pure.wav", fallback="clean_ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -170,6 +171,14 @@ VOICE_PROFILES = {
         "speed_factor": 0.86,
         "pause_ms": 0.44,
         "cfg_strength": 1.42,
+    },
+    "epic": {
+        "audio": epic_audio,
+        "ref_text": "shuning uchun bojxona nazorati davlatning iqtisodiy xavfsizligini ta'minlovchi muhim vositalardan biri hisoblanadi.",
+        "mel_len": epic_len,
+        "speed_factor": 0.94,
+        "pause_ms": 0.38,
+        "cfg_strength": 1.60,
     }
 }
 VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
@@ -177,8 +186,10 @@ VOICE_PROFILES["shodiyona"] = VOICE_PROFILES["cheerful"]
 VOICE_PROFILES["gamgin"] = VOICE_PROFILES["melancholic"]
 VOICE_PROFILES["mayus"] = VOICE_PROFILES["melancholic"]
 VOICE_PROFILES["dramatic"] = VOICE_PROFILES["melancholic"]
+VOICE_PROFILES["tantanavor"] = VOICE_PROFILES["epic"]
+VOICE_PROFILES["shijoatli"] = VOICE_PROFILES["epic"]
 
-print(f"[✓] Bekzod TTS Engine (6 emotion profiles) initialized successfully on {DEVICE}!")
+print(f"[✓] Bekzod TTS Engine (7 emotion profiles) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
@@ -411,6 +422,32 @@ def apply_style_dsp(wave: np.ndarray, voice: str = "classic", sr: int = 24000) -
         peak = np.max(np.abs(out))
         if peak > 1e-5:
             out = out * (0.82 / peak)
+
+    elif voice in ["epic", "tantanavor", "shijoatli"]:
+        # 1. Powerful chest resonance projection: +1.8 dB at 200 Hz
+        gain_chest = 10 ** (1.8 / 20.0)
+        sos_chest = signal.butter(2, 200, 'lp', fs=sr, output='sos')
+        low_band = signal.sosfiltfilt(sos_chest, out)
+        out = out + (gain_chest - 1.0) * low_band
+
+        # 2. Resonant high presence & clarity: +2.0 dB at 3000 Hz
+        gain_pres = 10 ** (2.0 / 20.0)
+        sos_pres = signal.butter(2, 3000, 'hp', fs=sr, output='sos')
+        high_band = signal.sosfiltfilt(sos_pres, out)
+        out = out + (gain_pres - 1.0) * high_band
+
+        # 3. Sub-bass rumble cut: 70 Hz HPF
+        sos_hp = signal.butter(2, 70, 'hp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_hp, out)
+
+        # 4. Clean air ceiling: 10000 Hz LP
+        sos_lp = signal.butter(2, 10000, 'lp', fs=sr, output='sos')
+        out = signal.sosfiltfilt(sos_lp, out)
+
+        # 5. Full projected energy peak: 0.95 (0 dB headroom)
+        peak = np.max(np.abs(out))
+        if peak > 1e-5:
+            out = out * (0.95 / peak)
 
     else:
         # Classic / Modern / Inquisitive standard broadcast DSP
