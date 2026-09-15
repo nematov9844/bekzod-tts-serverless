@@ -48,7 +48,17 @@ Content-Type: application/json
 
 ### Parametrlar:
 - `text` *(string, majburiy)*: Generatsiya qilinadigan matn.
-- `voice` *(string, ixtiyoriy)*: `"modern"` (tiniq, dinamik) yoki `"classic"` (chuqur bariton). Default: `"modern"`.
+- `voice` *(string, ixtiyoriy)*: Tanlangan ekspressiv fe'l / ovoz profili:
+  - `"classic"`: Rasmiy / Vazmin Oltin Bariton (default)
+  - `"modern"`: Zamonaviy / Podkast (jonli, tiniq)
+  - `"storyteller"`: Mayin Ertakchi / Muloyim
+  - `"inquisitive"`: Qiziquvchan / Savol intonatsiyasi
+  - `"cheerful"`: Quvnoq / Shodiyona
+  - `"melancholic"`: Mayus / G'amgin (vazmin, chuqur pauzalar)
+  - `"epic"`: Tantanavor / Shijoatli (kuchli dinamika)
+  - `"mysterious"`: Sirli / Pinhona (past, osoyishta shivirlash)
+  - `"authoritative"`: Qat'iy / Buyruq (rasmiy diktor)
+  - `"ironic"`: Kinoyali / Sarkazm
 - `speed` *(float, ixtiyoriy)*: `0.8` dan `1.5` gacha. Default: `1.0`.
 - `format` *(string, ixtiyoriy)*: `"mp3"` yoki `"wav"`. Default: `"mp3"`.
 
