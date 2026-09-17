@@ -20,7 +20,7 @@ import soundfile as sf
 import numpy as np
 import scipy.signal as signal
 from safetensors.torch import load_file
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, HfApi, create_repo
 import runpod
 import google.generativeai as genai
 
@@ -42,6 +42,45 @@ print("[*] Initializing Bekzod TTS 150k Studio Clean Engine on cold start...")
 REPO_ID = os.environ.get("HF_REPO_ID", "lynx9844/f5tts-bekzod-200k-uzbek")
 HF_TOKEN = os.environ.get("HF_TOKEN", None)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# RunPod's /run endpoint caps responses at 10MB (/runsync at 20MB); base64
+# adds ~33% overhead, so anything much over ~6MB raw audio risks the job
+# completing successfully server-side while RunPod silently drops the
+# response (confirmed live: a 4000-word document took ~7-8 minutes to
+# synthesize and returned COMPLETED with a completely empty output, in
+# both wav and mp3). Long documents get uploaded to a public HF dataset
+# repo instead, and the response carries a URL rather than inline bytes.
+OUTPUT_SIZE_LIMIT_BYTES = 6_000_000
+OUTPUT_REPO = os.environ.get("HF_OUTPUT_REPO", "lynx9844/bekzod-tts-outputs")
+_output_repo_ready = False
+
+
+def _ensure_output_repo():
+    global _output_repo_ready
+    if _output_repo_ready:
+        return
+    try:
+        create_repo(OUTPUT_REPO, repo_type="dataset", token=HF_TOKEN, exist_ok=True, private=False)
+    except Exception as e:
+        print(f"[!] Could not ensure HF output repo {OUTPUT_REPO}: {e}")
+    _output_repo_ready = True
+
+
+def upload_large_output(audio_bytes: bytes, fmt: str) -> str:
+    """Uploads audio too large for RunPod's inline payload limit to a public
+    HF dataset repo and returns a direct download URL."""
+    import uuid
+    _ensure_output_repo()
+    fname = f"{uuid.uuid4().hex}.{fmt}"
+    api = HfApi(token=HF_TOKEN)
+    api.upload_file(
+        path_or_fileobj=io.BytesIO(audio_bytes),
+        path_in_repo=fname,
+        repo_id=OUTPUT_REPO,
+        repo_type="dataset",
+        token=HF_TOKEN,
+    )
+    return f"https://huggingface.co/datasets/{OUTPUT_REPO}/resolve/main/{fname}"
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -705,6 +744,23 @@ def handler(job: dict) -> dict:
         buf = io.BytesIO()
         sf.write(buf, full_audio, target_sample_rate, format="WAV", subtype="PCM_16")
         audio_bytes = buf.getvalue()
+
+    if len(audio_bytes) > OUTPUT_SIZE_LIMIT_BYTES:
+        try:
+            audio_url = upload_large_output(audio_bytes, fmt)
+            return {
+                "status": "COMPLETED",
+                "audio_url": audio_url,
+                "duration": total_duration,
+                "format": fmt,
+                "voice": voice,
+                "sample_rate": target_sample_rate,
+                "steps": steps,
+                "clean": clean_mode
+            }
+        except Exception as e:
+            print(f"[!] Large-output HF upload failed ({e}), falling back to inline base64 "
+                  f"-- this will likely exceed RunPod's payload limit and return empty.")
 
     b64_str = base64.b64encode(audio_bytes).decode("utf-8")
 
