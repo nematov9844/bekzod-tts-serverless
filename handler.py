@@ -720,6 +720,13 @@ def handler(job: dict) -> dict:
     # 6. Apply Style Master DSP (energy, resonance, warmth, spectral contour per style)
     if clean_mode:
         full_audio = apply_style_dsp(full_audio, voice=voice, sr=target_sample_rate)
+
+    # 6b. Lead-in silence: clean_speech_bounds correctly trims stray blips
+    # but leaves almost no natural breathing room before speech starts, so
+    # playback can feel like it cuts in mid-word before the ear has settled.
+    lead_in_silence = np.zeros(int(0.35 * target_sample_rate), dtype=full_audio.dtype)
+    full_audio = np.concatenate([lead_in_silence, full_audio])
+
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
     # 7. Encode to MP3 or WAV
