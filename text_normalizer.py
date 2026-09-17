@@ -68,19 +68,7 @@ def normalize_numbers(text: str) -> str:
     # Foizlar: 50% -> ellik foiz
     text = re.sub(r'(\d+)\s*%', lambda m: integer_to_uzbek(int(m.group(1))) + " foiz", text)
     
-    # O'nli kasrlar: 7.8 yoki 0.75 -> yetti butun sakkiz
-    text = re.sub(r'(\d+)[.,](\d+)', lambda m: f"{integer_to_uzbek(int(m.group(1)))} butun {integer_to_uzbek(int(m.group(2)))}", text)
-    
-    # Pul birliklari
-    text = re.sub(r'\$(\d+)', lambda m: integer_to_uzbek(int(m.group(1))) + " dollar", text)
-    text = re.sub(r'(\d+)\s*so\'?m', lambda m: integer_to_uzbek(int(m.group(1))) + " so'm", text)
-    text = re.sub(r'(\d+)\s*rubl', lambda m: integer_to_uzbek(int(m.group(1))) + " rubl", text)
-    text = re.sub(r'(\d+)\s*yevro', lambda m: integer_to_uzbek(int(m.group(1))) + " yevro", text)
-    
-    # Vaqt: 14:30 -> o'n to'rt o'ttiz
-    text = re.sub(r'(\d{1,2}):(\d{2})', lambda m: f"{integer_to_uzbek(int(m.group(1)))} {integer_to_uzbek(int(m.group(2)))}", text)
-    
-    # Tartib raqamlar: 1-chi, 2-chi, 5-avgust -> birinchi, ikkinchi, beshinchi
+    # Tartib raqamlar uchun yordamchi (quyidagi barcha qoidalarda ishlatiladi)
     ORDINAL_SUFFIXES = {
         "bir": "birinchi", "ikki": "ikkinchi", "uch": "uchinchi", "to'rt": "to'rtinchi",
         "besh": "beshinchi", "olti": "oltinchi", "yetti": "yettinchi", "sakkiz": "sakkizinchi",
@@ -88,9 +76,9 @@ def normalize_numbers(text: str) -> str:
         "qirq": "qirqinchi", "ellik": "elliginchi", "oltmish": "oltmishinchi", "yetmish": "yetmishinchi",
         "sakson": "saksoninchi", "to'qson": "to'qsoninchi", "yuz": "yuzinchi", "ming": "minginchi"
     }
-    
-    def make_ordinal(m):
-        num_str = integer_to_uzbek(int(m.group(1)))
+
+    def _ordinal_word(num: int) -> str:
+        num_str = integer_to_uzbek(num)
         words = num_str.split()
         last_word = words[-1]
         if last_word in ORDINAL_SUFFIXES:
@@ -100,6 +88,34 @@ def normalize_numbers(text: str) -> str:
         else:
             words[-1] = last_word + "inchi"
         return " ".join(words)
+
+    def make_ordinal(m):
+        return _ordinal_word(int(m.group(1)))
+
+    # Bo'lim/band-so'z birikmalari: 27.1-modda, 27.1-band -> yigirma yetti nuqta
+    # birinchi modda (birinchi raqam moddaning o'zi -- kardinal, ikkinchisi
+    # unga chizilgan so'zga tartib son sifatida ulanadi). Bu qoida quyidagi
+    # oddiy "N.N" va "N-so'z" qoidalaridan OLDIN ishlashi kerak, aks holda ular
+    # "27.1" ni "band"dan ajratib, chiziqchani bo'sh qoldirib ketardi.
+    text = re.sub(
+        r"\b(\d+)[.,](\d+)-([A-Za-zʼʻʽ'Ѐ-ӿ][\w'ʼʻʽ]*)",
+        lambda m: f"{integer_to_uzbek(int(m.group(1)))} nuqta {_ordinal_word(int(m.group(2)))} {m.group(3)}",
+        text
+    )
+
+    # Bo'lim raqamlari: 1.1., 2.3 -> bir nuqta bir (matnda bu deyarli doim
+    # moddalar/bandlarga havola, "1.1 kg" kabi haqiqiy o'nli kasr emas --
+    # shuning uchun "butun" (matematik kasr) emas, "nuqta" deb o'qiladi
+    text = re.sub(r'(\d+)[.,](\d+)', lambda m: f"{integer_to_uzbek(int(m.group(1)))} nuqta {integer_to_uzbek(int(m.group(2)))}", text)
+
+    # Pul birliklari
+    text = re.sub(r'\$(\d+)', lambda m: integer_to_uzbek(int(m.group(1))) + " dollar", text)
+    text = re.sub(r'(\d+)\s*so\'?m', lambda m: integer_to_uzbek(int(m.group(1))) + " so'm", text)
+    text = re.sub(r'(\d+)\s*rubl', lambda m: integer_to_uzbek(int(m.group(1))) + " rubl", text)
+    text = re.sub(r'(\d+)\s*yevro', lambda m: integer_to_uzbek(int(m.group(1))) + " yevro", text)
+
+    # Vaqt: 14:30 -> o'n to'rt o'ttiz
+    text = re.sub(r'(\d{1,2}):(\d{2})', lambda m: f"{integer_to_uzbek(int(m.group(1)))} {integer_to_uzbek(int(m.group(2)))}", text)
 
     # Yillar: 2026-yil / 2026 yil -> ikki ming yigirma oltinchi yil
     text = re.sub(r'(\d+)-(?:yil|yilda|yilgi|yildan)', lambda m: make_ordinal(m) + " " + m.group(0).split('-')[-1], text)
@@ -114,6 +130,17 @@ def normalize_numbers(text: str) -> str:
 
     text = re.sub(r'(\d+)-' + months, _month_rep, text, flags=re.IGNORECASE)
     text = re.sub(r'(\d+)\s+' + months, _month_rep, text, flags=re.IGNORECASE)
+
+    # Umumiy tartib raqamlar: 1-Mavzu, 2-bob, 5-band, 27-modda -> birinchi Mavzu,
+    # ikkinchi bob... Yil/oy qoidalaridan KEYIN ishlaydi (ular o'ziga xos so'z
+    # qo'shimchasi bilan allaqachon ushlab olingan), shuning uchun bu yerga faqat
+    # "N-so'z" ko'rinishidagi qolgan hollar (mavzu, bob, band, modda va h.k.) yetib
+    # keladi -- avval "1" ni "bir" (son) deb o'qib qo'yardi, "birinchi" emas.
+    text = re.sub(
+        r"\b(\d+)-([A-Za-zʼʻʽ'Ѐ-ӿ][\w'ʼʻʽ]*)",
+        lambda m: make_ordinal(m) + " " + m.group(2),
+        text
+    )
 
     # Oddiy raqamlar: 123 -> bir yuz yigirma uch
     text = re.sub(r'\b\d+\b', lambda m: f" {integer_to_uzbek(int(m.group(0)))} ", text)
