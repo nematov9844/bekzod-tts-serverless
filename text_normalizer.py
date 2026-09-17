@@ -92,6 +92,16 @@ def normalize_numbers(text: str) -> str:
     def make_ordinal(m):
         return _ordinal_word(int(m.group(1)))
 
+    # Raqamlar oralig'i + so'z: 353-357-moddalar, 355–357-moddalari (en-dash
+    # ham uchraydi) -> uch yuz ellik uchdan uch yuz ellik yettigacha moddalar.
+    # Buni qo'ymasa, oraliq chiziqchasi/en-dashi tozalanmay so'z ichida harf
+    # sifatida qolib ketardi (masalan "...uch yuz ellik uch –uch yuz...").
+    text = re.sub(
+        r"\b(\d+)\s*[–—-]\s*(\d+)-([A-Za-zʼʻʽ'Ѐ-ӿ][\w'ʼʻʽ]*)",
+        lambda m: f"{integer_to_uzbek(int(m.group(1)))}dan {integer_to_uzbek(int(m.group(2)))}gacha {m.group(3)}",
+        text
+    )
+
     # Bo'lim/band-so'z birikmalari: 27.1-modda, 27.1-band -> yigirma yetti nuqta
     # birinchi modda (birinchi raqam moddaning o'zi -- kardinal, ikkinchisi
     # unga chizilgan so'zga tartib son sifatida ulanadi). Bu qoida quyidagi
