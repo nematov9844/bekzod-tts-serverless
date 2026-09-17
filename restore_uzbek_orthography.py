@@ -399,6 +399,22 @@ ORTHOGRAPHY_RULES = [
     (r"\bquron\b", "Qur'on"),
 ]
 
+def _apostrophe_aware_boundary(pattern: str) -> str:
+    """
+    Python \\b treats the apostrophe as a non-word character, so \\b fires
+    INSIDE words like "g'oz" (right after the apostrophe) as if that were a
+    real word boundary. That makes whole-word rules like \\boz\\b -> "o'z"
+    wrongly match the "oz" inside "g'oz", corrupting it into "g'o'z".
+    Swap the \\b anchors for lookaround that also excludes the apostrophe,
+    so boundaries are only real word edges, not the letter/apostrophe seam.
+    """
+    if pattern.startswith(r"\b"):
+        pattern = "(?<![a-zA-Z'])" + pattern[2:]
+    if pattern.endswith(r"\b"):
+        pattern = pattern[:-2] + "(?![a-zA-Z'])"
+    return pattern
+
+
 def restore_orthography(text: str) -> str:
     """
     Matndagi barcha o', g' va tutuq belgilarini 100% tiklaydi,
@@ -407,12 +423,12 @@ def restore_orthography(text: str) -> str:
     t = text
     t = unicodedata.normalize("NFC", t)
     t = re.sub(r"[`'ʻʼʽ՚’‘]", "'", t)
-    
+
     for pat, rep in ASR_CORRECTIONS:
-        t = re.sub(pat, rep, t, flags=re.IGNORECASE)
-        
+        t = re.sub(_apostrophe_aware_boundary(pat), rep, t, flags=re.IGNORECASE)
+
     for pat, rep in ORTHOGRAPHY_RULES:
-        t = re.sub(pat, rep, t, flags=re.IGNORECASE)
+        t = re.sub(_apostrophe_aware_boundary(pat), rep, t, flags=re.IGNORECASE)
         
     t = re.sub(r"o[']", "o'", t, flags=re.IGNORECASE)
     t = re.sub(r"g[']", "g'", t, flags=re.IGNORECASE)

@@ -54,7 +54,30 @@ def clean_speech_bounds(wave: np.ndarray, sr: int = 24000, pad_lead_ms: int = 70
     if len(active) == 0:
         return wave
 
-    lead_sample = max(0, int((active[0] * hop_len) - (pad_lead_ms / 1000.0 * sr)))
+    # F5-TTS occasionally emits a brief spurious blip (reference-conditioning
+    # bleed) right at the very start, followed by an unnaturally long silence
+    # before the real speech begins. Picking active[0] as the onset would keep
+    # that blip and the dead air after it. Instead, merge active frames
+    # separated by short (<400ms, normal word-gap) silences into clusters and
+    # use the START of the LARGEST cluster -- real speech reliably dominates
+    # an isolated blip in total active-frame count.
+    max_gap_frames = max(1, int(0.4 / (hop_len / sr)))
+    gaps = np.where(np.diff(active) > 1)[0]
+    run_starts = np.concatenate(([active[0]], active[gaps + 1]))
+    run_ends = np.concatenate((active[gaps], [active[-1]]))
+
+    cluster_starts, cluster_ends, cluster_len = [run_starts[0]], [run_ends[0]], [run_ends[0] - run_starts[0] + 1]
+    for s, e in zip(run_starts[1:], run_ends[1:]):
+        if s - cluster_ends[-1] <= max_gap_frames:
+            cluster_ends[-1] = e
+            cluster_len[-1] += e - s + 1
+        else:
+            cluster_starts.append(s)
+            cluster_ends.append(e)
+            cluster_len.append(e - s + 1)
+    onset_frame = cluster_starts[int(np.argmax(cluster_len))]
+
+    lead_sample = max(0, int((onset_frame * hop_len) - (pad_lead_ms / 1000.0 * sr)))
     tail_sample = min(len(wave), int(((active[-1] * hop_len) + frame_len) + (pad_tail_ms / 1000.0 * sr)))
 
     trimmed = wave[lead_sample:tail_sample].copy()

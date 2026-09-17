@@ -61,6 +61,8 @@ Content-Type: application/json
   - `"ironic"`: Kinoyali / Sarkazm
 - `speed` *(float, ixtiyoriy)*: `0.8` dan `1.5` gacha. Default: `1.0`.
 - `format` *(string, ixtiyoriy)*: `"mp3"` yoki `"wav"`. Default: `"mp3"`.
+- `clean` *(boolean, ixtiyoriy)*: `true` (shovqinsiz) — vokoder boshlanish/tugash artefaktlarini tozalash va yakuniy mastering EQ to'liq qo'llaniladi (default). `false` (shovqinli) — hech qanday tozalash/mastering qo'llanilmaydi, xom vokoder chiqishi qaytariladi.
+- `proofread` *(boolean, ixtiyoriy)*: `true` bo'lsa, matn TTS'ga yuborishdan oldin Gemini orqali faqat imlo/tinish belgilari xatolari (masalan, fayldan chiqarilgan matndagi OCR artefaktlari) tuzatiladi — mazmun, uzunlik yoki so'zlar o'zgartirilmaydi. Default: `false`. Kirill matn har doim (bu maydondan qat'i nazar) avtomatik lotinga o'giriladi.
 
 ### Response Body (`/runsync`)
 ```json

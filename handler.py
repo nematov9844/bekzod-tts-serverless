@@ -22,6 +22,7 @@ import scipy.signal as signal
 from safetensors.torch import load_file
 from huggingface_hub import hf_hub_download
 import runpod
+import google.generativeai as genai
 
 from f5_tts.model import CFM, DiT
 from f5_tts.infer.utils_infer import load_vocoder, target_sample_rate, hop_length
@@ -30,6 +31,7 @@ from f5_tts.infer.utils_infer import load_vocoder, target_sample_rate, hop_lengt
 from text_normalizer import normalize_uzbek_text
 from phonetic_engine import calculate_phonetic_duration
 from audio_stitcher import clean_speech_bounds
+from cyrillic_to_latin import cyrillic_to_latin
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. INITIALIZATION & ASSET LOADING (RUNS ONCE ON WORKER COLD START)
@@ -41,6 +43,51 @@ REPO_ID = os.environ.get("HF_REPO_ID", "lynx9844/f5tts-bekzod-200k-uzbek")
 HF_TOKEN = os.environ.get("HF_TOKEN", None)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_DIR = os.environ.get("MODEL_DIR", "/models")
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+PROOFREAD_PROMPT = """You are a strict Uzbek Latin-script orthography proofreader.
+Fix ONLY spelling, punctuation, and obvious text-extraction/OCR artifacts
+(broken words, wrong apostrophes, stray characters) in the text below.
+Do NOT add, remove, summarize, rephrase, or reorder any content. Do NOT
+change the subject matter or meaning. Preserve paragraph breaks. Return
+ONLY the corrected text, with no commentary, no markdown fences, nothing else.
+
+TEXT:
+{text}
+"""
+
+
+def proofread_uzbek_text(text: str) -> str:
+    """Fixes spelling/orthography only via Gemini, content-preserving. Falls
+    back to the original text untouched if Gemini is unavailable or fails --
+    this is a proofreading pass, not a required step."""
+    if not GEMINI_API_KEY or not text.strip():
+        return text
+    available_models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
+    for model_name in available_models:
+        try:
+            model = genai.GenerativeModel(model_name=model_name)
+            response = model.generate_content(
+                PROOFREAD_PROMPT.format(text=text),
+                request_options={"timeout": 60.0},
+            )
+            if response and response.text and response.text.strip():
+                out = response.text.strip()
+                if out.startswith("```"):
+                    lines = out.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    out = "\n".join(lines).strip()
+                return out
+        except Exception as e:
+            print(f"[!] Gemini proofread model {model_name} failed: {e}")
+    print("[!] Gemini proofreading unavailable, using original text")
+    return text
 
 def get_file(filename: str) -> str:
     local_p = os.path.join(MODEL_DIR, filename)
@@ -522,6 +569,16 @@ def handler(job: dict) -> dict:
     raw_text = job_input.get("text", "").strip()
     if not raw_text:
         return {"error": "Matn kiritilmagan ('text' bo'sh)", "status": "FAILED"}
+    # Safety net: convert any Cyrillic Uzbek text to Latin before normalization
+    # (frontend already does this client-side, but a direct API caller might
+    # send raw Cyrillic). No-op on already-Latin text.
+    raw_text = cyrillic_to_latin(raw_text)
+
+    # Optional Gemini spelling/orthography proofread pass (e.g. for text
+    # extracted from uploaded PDF/DOC/XLS files, which often has OCR/
+    # extraction artifacts). Content-preserving -- fixes spelling only.
+    if job_input.get("proofread"):
+        raw_text = proofread_uzbek_text(raw_text)
 
     voice = (job_input.get("voice") or job_input.get("voice_style") or job_input.get("style_name") or "classic").lower()
     style = job_input.get("style", "adabiy").lower()
@@ -529,6 +586,10 @@ def handler(job: dict) -> dict:
     steps = int(job_input.get("steps", 32))
     fmt = job_input.get("format", "mp3").lower()
     seed = job_input.get("seed", None)
+    # "clean" (default True = shovqinsiz): applies the full cleanup pipeline
+    # (per-chunk vocoder-bounds trimming + final mastering EQ). Set false
+    # (shovqinli) to get the raw, unprocessed vocoder output instead.
+    clean_mode = bool(job_input.get("clean", True))
 
     if seed is not None:
         torch.manual_seed(seed)
@@ -595,13 +656,16 @@ def handler(job: dict) -> dict:
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
 
-            # Clean vocoder onset latency and trailing vocoder air (70ms lead preserves initial plosives B, P)
-            chunk_clean = clean_speech_bounds(
-                wave_chunk.astype(np.float32),
-                sr=target_sample_rate,
-                pad_lead_ms=70,
-                pad_tail_ms=160
-            )
+            if clean_mode:
+                # Clean vocoder onset latency and trailing vocoder air (70ms lead preserves initial plosives B, P)
+                chunk_clean = clean_speech_bounds(
+                    wave_chunk.astype(np.float32),
+                    sr=target_sample_rate,
+                    pad_lead_ms=70,
+                    pad_tail_ms=160
+                )
+            else:
+                chunk_clean = wave_chunk.astype(np.float32)
             generated_waves.append(chunk_clean)
 
     # 5. Natural human breath pause between sentences shaped per style
@@ -615,7 +679,8 @@ def handler(job: dict) -> dict:
     full_audio = np.concatenate(final_pieces)
 
     # 6. Apply Style Master DSP (energy, resonance, warmth, spectral contour per style)
-    full_audio = apply_style_dsp(full_audio, voice=voice, sr=target_sample_rate)
+    if clean_mode:
+        full_audio = apply_style_dsp(full_audio, voice=voice, sr=target_sample_rate)
     total_duration = round(len(full_audio) / target_sample_rate, 2)
 
     # 7. Encode to MP3 or WAV
@@ -650,7 +715,8 @@ def handler(job: dict) -> dict:
         "format": fmt,
         "voice": voice,
         "sample_rate": target_sample_rate,
-        "steps": steps
+        "steps": steps,
+        "clean": clean_mode
     }
 
 if __name__ == "__main__":
