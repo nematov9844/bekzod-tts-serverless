@@ -14,7 +14,12 @@ RUN apt-get update && \
 COPY requirements.txt /requirements.txt
 RUN pip install --no-cache-dir -r /requirements.txt
 
-# Copy handler
+# Copy handler and the local modules it imports
 COPY handler.py /handler.py
+COPY text_normalizer.py /text_normalizer.py
+COPY phonetic_engine.py /phonetic_engine.py
+COPY audio_stitcher.py /audio_stitcher.py
+COPY restore_uzbek_orthography.py /restore_uzbek_orthography.py
+COPY cyrillic_to_latin.py /cyrillic_to_latin.py
 
 CMD ["python", "-u", "/handler.py"]

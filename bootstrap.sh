@@ -14,7 +14,7 @@ fi
 
 # 2. Python dependencies
 echo "[*] Ensuring Python packages..."
-pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts
+pip install --no-cache-dir -q runpod vocos scipy huggingface-hub safetensors soundfile f5-tts google-generativeai
 
 # 3. Fetch latest 1-to-1 pipeline modules from GitHub
 echo "[*] Fetching latest pipeline modules from GitHub..."
@@ -24,6 +24,7 @@ curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/restore_uzbek_orthography.p
 curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/text_normalizer.py?v=${TS}" -o /text_normalizer.py
 curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/phonetic_engine.py?v=${TS}" -o /phonetic_engine.py
 curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/audio_stitcher.py?v=${TS}" -o /audio_stitcher.py
+curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/cyrillic_to_latin.py?v=${TS}" -o /cyrillic_to_latin.py
 curl -sSfL -H 'Cache-Control: no-cache' "${BASE_URL}/handler.py?v=${TS}" -o /handler.py
 
 # 4. Launch handler
