@@ -232,7 +232,7 @@ VOICE_PROFILES = {
     },
     "inquisitive": {
         "audio": inquisitive_audio,
-        "ref_text": "bu savol amaliyotda juda qiziqtiradi.",
+        "ref_text": "eksportda ham bojxona qiymati kerakmi? degan savolga javob berishga harakat qilamiz.",
         "mel_len": inquisitive_len,
         "speed_factor": 1.02,
         "pause_ms": 0.22,
