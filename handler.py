@@ -201,16 +201,17 @@ def load_anchor(filename: str, fallback: Optional[str] = None):
     mel_len = a.shape[-1] // hop_length
     return a, mel_len
 
+# 2026-09-17: storyteller/cheerful/melancholic/epic/mysterious/authoritative/
+# ironic anchors were confirmed BY EAR (Lynx) to actually be a different
+# person's voice ("Zufar aka"), mislabeled as Bekzod's. Their source files
+# were deleted from the lynx9844/f5tts-bekzod-200k-uzbek HF repo -- do not
+# re-add load_anchor() calls for them until a verified-correct Bekzod
+# recording replaces each one. See UNAVAILABLE_STYLES below: requests for
+# these styles are rejected explicitly rather than silently falling back to
+# classic/modern audio under the wrong style label.
 classic_audio, classic_len = load_anchor("clean_ref_classic_baritone.wav", fallback="ref_classic_baritone.wav")
 modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="ref_modern_active.wav")
-storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v4_clean.wav", fallback="clean_ref_classic_baritone.wav")
-inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v4_clean.wav", fallback="clean_ref_modern_active.wav")
-cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_clean.wav", fallback="clean_ref_modern_active.wav")
-melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v5_pure.wav", fallback="clean_ref_classic_baritone.wav")
-epic_audio, epic_len = load_anchor("ref_epic_v1_pure.wav", fallback="clean_ref_modern_active.wav")
-mysterious_audio, mysterious_len = load_anchor("ref_mysterious_v1_pure.wav", fallback="clean_ref_classic_baritone.wav")
-authoritative_audio, authoritative_len = load_anchor("ref_authoritative_v1_pure.wav", fallback="clean_ref_classic_baritone.wav")
-ironic_audio, ironic_len = load_anchor("ref_ironic_v1_pure.wav", fallback="clean_ref_modern_active.wav")
+inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v5_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -229,14 +230,6 @@ VOICE_PROFILES = {
         "pause_ms": 0.20,
         "cfg_strength": 1.55,
     },
-    "storyteller": {
-        "audio": storyteller_audio,
-        "ref_text": "tasavvur qiling.",
-        "mel_len": storyteller_len,
-        "speed_factor": 0.96,
-        "pause_ms": 0.34,
-        "cfg_strength": 1.50,
-    },
     "inquisitive": {
         "audio": inquisitive_audio,
         "ref_text": "bu savol amaliyotda juda qiziqtiradi.",
@@ -245,76 +238,26 @@ VOICE_PROFILES = {
         "pause_ms": 0.22,
         "cfg_strength": 1.60,
     },
-    "cheerful": {
-        "audio": cheerful_audio,
-        "ref_text": "tashqi iqtisodiy faoliyatda qonuniy raqobatni ta'minlaydi.",
-        "mel_len": cheerful_len,
-        "speed_factor": 1.05,
-        "pause_ms": 0.18,
-        "cfg_strength": 1.70,
-    },
-    "melancholic": {
-        "audio": melancholic_audio,
-        "ref_text": "tashqi savdoni soddalashtirishga xizmat qilmoqda.",
-        "mel_len": melancholic_len,
-        "speed_factor": 0.88,
-        "pause_ms": 0.45,
-        "cfg_strength": 1.45,
-    },
-    "epic": {
-        "audio": epic_audio,
-        "ref_text": "shuning uchun bojxona nazorati davlatning iqtisodiy xavfsizligini ta'minlovchi muhim vositalardan biri hisoblanadi.",
-        "mel_len": epic_len,
-        "speed_factor": 0.96,
-        "pause_ms": 0.30,
-        "cfg_strength": 1.60,
-    },
-    "mysterious": {
-        "audio": mysterious_audio,
-        "ref_text": "konvensiyaning asosiy maqsadi etib bojxona tartib taomillarini soddalashtirish.",
-        "mel_len": mysterious_len,
-        "speed_factor": 0.91,
-        "pause_ms": 0.42,
-        "cfg_strength": 1.45,
-    },
-    "authoritative": {
-        "audio": authoritative_audio,
-        "ref_text": "yo'q ayrim harakatlarga qonunchilikda ruxsat berilgan.",
-        "mel_len": authoritative_len,
-        "speed_factor": 0.98,
-        "pause_ms": 0.20,
-        "cfg_strength": 1.65,
-    },
-    "ironic": {
-        "audio": ironic_audio,
-        "ref_text": "nega bu qadar ko'p talablar bor bu talablar davlat tomonidan shunchaki o'rnatilmagan.",
-        "mel_len": ironic_len,
-        "speed_factor": 0.97,
-        "pause_ms": 0.28,
-        "cfg_strength": 1.55,
-    }
 }
-# Uzbek and semantic aliases
+# Uzbek and semantic aliases (only for the 3 verified-correct Bekzod styles)
 VOICE_PROFILES["vazmin"] = VOICE_PROFILES["classic"]
 VOICE_PROFILES["podkast"] = VOICE_PROFILES["modern"]
-VOICE_PROFILES["ertakchi"] = VOICE_PROFILES["storyteller"]
 VOICE_PROFILES["savol"] = VOICE_PROFILES["inquisitive"]
-VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
-VOICE_PROFILES["shodiyona"] = VOICE_PROFILES["cheerful"]
-VOICE_PROFILES["gamgin"] = VOICE_PROFILES["melancholic"]
-VOICE_PROFILES["mayus"] = VOICE_PROFILES["melancholic"]
-VOICE_PROFILES["dramatic"] = VOICE_PROFILES["melancholic"]
-VOICE_PROFILES["tantanavor"] = VOICE_PROFILES["epic"]
-VOICE_PROFILES["shijoatli"] = VOICE_PROFILES["epic"]
-VOICE_PROFILES["sirli"] = VOICE_PROFILES["mysterious"]
-VOICE_PROFILES["pinhona"] = VOICE_PROFILES["mysterious"]
-VOICE_PROFILES["qatiy"] = VOICE_PROFILES["authoritative"]
-VOICE_PROFILES["qat'iy"] = VOICE_PROFILES["authoritative"]
-VOICE_PROFILES["buyruq"] = VOICE_PROFILES["authoritative"]
-VOICE_PROFILES["kinoyali"] = VOICE_PROFILES["ironic"]
-VOICE_PROFILES["sarkazm"] = VOICE_PROFILES["ironic"]
 
-print(f"[✓] Bekzod TTS Engine (10 Expressive Styles Matrix) initialized successfully on {DEVICE}!")
+# 2026-09-17: these style names (and their Uzbek aliases) used to map to
+# anchors that turned out to be a different speaker, not Bekzod. Rejecting
+# them explicitly -- with a clear error -- instead of silently substituting
+# classic/modern audio under the requested style's label. Remove an entry
+# here once a verified-correct Bekzod recording exists for it.
+UNAVAILABLE_STYLES = {
+    "storyteller", "cheerful", "melancholic", "epic", "mysterious",
+    "authoritative", "ironic",
+    "ertakchi", "quvnoq", "shodiyona", "gamgin", "mayus", "dramatic",
+    "tantanavor", "shijoatli", "sirli", "pinhona", "qatiy", "qat'iy",
+    "buyruq", "kinoyali", "sarkazm",
+}
+
+print(f"[✓] Bekzod TTS Engine (3 verified styles: classic/modern/inquisitive) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
@@ -620,6 +563,15 @@ def handler(job: dict) -> dict:
         raw_text = proofread_uzbek_text(raw_text)
 
     voice = (job_input.get("voice") or job_input.get("voice_style") or job_input.get("style_name") or "classic").lower()
+    if voice in UNAVAILABLE_STYLES:
+        return {
+            "error": (
+                f"'{voice}' ovoz uslubi hozircha mavjud emas: bu uslub uchun "
+                f"yuklangan anchor haqiqiy Bekzod aka ovozi emasligi tasdiqlandi va "
+                f"o'chirildi. Hozircha mavjud uslublar: classic, modern, inquisitive."
+            ),
+            "status": "FAILED",
+        }
     style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
     steps = int(job_input.get("steps", 32))
