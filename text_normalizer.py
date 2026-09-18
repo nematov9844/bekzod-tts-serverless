@@ -123,6 +123,18 @@ def normalize_numbers(text: str) -> str:
         text
     )
 
+    # Valyuta belgilari: $50, €50.5, £30, ¥2000 -> summa so'zga aylanadi,
+    # valyuta nomi qo'shiladi. Bu qoida o'nli/butun sonlarni so'zga
+    # aylantiruvchi qoidalardan OLDIN ishlashi shart -- aks holda "$150.50"
+    # dagi o'nli qism avval so'zga aylanib, "$" symbolidan keyin raqam
+    # qolmay, "dollar" so'zi butunlay tushib qolardi.
+    CURRENCY_SYMBOLS = {"$": "dollar", "€": "yevro", "£": "funt sterling", "¥": "yena", "₹": "rupiya", "₽": "rubl"}
+    text = re.sub(
+        r'[$€£¥₹₽](\d+(?:[.,]\d+)?)',
+        lambda m: f"{m.group(1)} {CURRENCY_SYMBOLS[m.group(0)[0]]}",
+        text
+    )
+
     # Bo'lim raqamlari: 1.1., 2.3 -> bir nuqta bir (matnda bu deyarli doim
     # moddalar/bandlarga havola, "1.1 kg" kabi haqiqiy o'nli kasr emas --
     # shuning uchun "butun" (matematik kasr) emas, "nuqta" deb o'qiladi.
@@ -134,8 +146,8 @@ def normalize_numbers(text: str) -> str:
         text
     )
 
-    # Pul birliklari
-    text = re.sub(r'\$(\d+)', lambda m: integer_to_uzbek(int(m.group(1))) + " dollar", text)
+    # Pul birliklari (so'z sifatida yozilgan valyutalar -- belgi bilan
+    # yozilganlari yuqorida, sonlarga aylanishdan oldin hal qilingan)
     text = re.sub(r'(\d+)\s*so\'?m', lambda m: integer_to_uzbek(int(m.group(1))) + " so'm", text)
     text = re.sub(r'(\d+)\s*rubl', lambda m: integer_to_uzbek(int(m.group(1))) + " rubl", text)
     text = re.sub(r'(\d+)\s*yevro', lambda m: integer_to_uzbek(int(m.group(1))) + " yevro", text)
