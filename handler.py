@@ -383,7 +383,11 @@ def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = 
     norm_text = re.sub(r'[,;:]', '.', norm_text)
     norm_text = re.sub(r'[!?]', '.', norm_text)
     norm_text = re.sub(r'\.+', '.', norm_text)
-    norm_text = norm_text.replace('"', '').replace('(', '').replace(')', '')
+    # '"' deleted (not spaced) can fuse adjacent words if it has no
+    # surrounding whitespace (e.g. 'salom"dunyo' -> 'salomdunyo'); '(' and
+    # ')' are already turned into spaces upstream by normalize_uzbek_text's
+    # whitelist filter, so replacing them here is a harmless no-op.
+    norm_text = norm_text.replace('"', ' ').replace('(', '').replace(')', '')
     norm_text = norm_text.replace("w", "v")
     
     # Filter for vocab
