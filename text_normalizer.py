@@ -63,10 +63,20 @@ def normalize_numbers(text: str) -> str:
     # Guruhlangan raqamlarni birlashtirish: 1 250 000 yoki 1,250,000 -> 1250000
     text = re.sub(r'(?<=\d)[\s,._](?=\d{3}\b)', '', text)
 
-    # Foizlar va o'nli kasrlar: 8.5% yoki 8,5% -> sakkiz butun besh foiz
-    text = re.sub(r'(\d+)[.,](\d+)\s*%', lambda m: f"{integer_to_uzbek(int(m.group(1)))} butun {integer_to_uzbek(int(m.group(2)))} foiz", text)
+    # Foizlar va o'nli kasrlar: 8.5% yoki 8,5% -> sakkiz butun besh foiz.
+    # Yetakchi "-" ham ushlanadi (masalan "-3.2%" kabi pasayish/manfiy
+    # o'zgarish foizlari uchun), aks holda "minus" yo'qolib ketardi.
+    text = re.sub(
+        r'(?<!\w)(-)?(\d+)[.,](\d+)\s*%',
+        lambda m: f"{'minus ' if m.group(1) else ''}{integer_to_uzbek(int(m.group(2)))} butun {integer_to_uzbek(int(m.group(3)))} foiz",
+        text
+    )
     # Foizlar: 50% -> ellik foiz
-    text = re.sub(r'(\d+)\s*%', lambda m: integer_to_uzbek(int(m.group(1))) + " foiz", text)
+    text = re.sub(
+        r'(?<!\w)(-)?(\d+)\s*%',
+        lambda m: f"{'minus ' if m.group(1) else ''}{integer_to_uzbek(int(m.group(2)))} foiz",
+        text
+    )
     
     # Tartib raqamlar uchun yordamchi (quyidagi barcha qoidalarda ishlatiladi)
     ORDINAL_SUFFIXES = {
@@ -115,8 +125,14 @@ def normalize_numbers(text: str) -> str:
 
     # Bo'lim raqamlari: 1.1., 2.3 -> bir nuqta bir (matnda bu deyarli doim
     # moddalar/bandlarga havola, "1.1 kg" kabi haqiqiy o'nli kasr emas --
-    # shuning uchun "butun" (matematik kasr) emas, "nuqta" deb o'qiladi
-    text = re.sub(r'(\d+)[.,](\d+)', lambda m: f"{integer_to_uzbek(int(m.group(1)))} nuqta {integer_to_uzbek(int(m.group(2)))}", text)
+    # shuning uchun "butun" (matematik kasr) emas, "nuqta" deb o'qiladi.
+    # Yetakchi "-" ham ushlanadi (masalan "-0.04" kabi minus balanslar/
+    # harorat uchun) -- aks holda "minus" so'zi yo'qolib ketardi.
+    text = re.sub(
+        r'(?<!\w)(-)?(\d+)[.,](\d+)',
+        lambda m: f"{'minus ' if m.group(1) else ''}{integer_to_uzbek(int(m.group(2)))} nuqta {integer_to_uzbek(int(m.group(3)))}",
+        text
+    )
 
     # Pul birliklari
     text = re.sub(r'\$(\d+)', lambda m: integer_to_uzbek(int(m.group(1))) + " dollar", text)
@@ -152,8 +168,13 @@ def normalize_numbers(text: str) -> str:
         text
     )
 
-    # Oddiy raqamlar: 123 -> bir yuz yigirma uch
-    text = re.sub(r'\b\d+\b', lambda m: f" {integer_to_uzbek(int(m.group(0)))} ", text)
+    # Oddiy raqamlar: 123 -> bir yuz yigirma uch. Yetakchi "-" ham ushlanadi
+    # (lekin faqat so'z/raqamdan keyin kelmasa -- "2024-2025" kabi oraliqlarda
+    # ikkinchi sondan oldingi "-" hali ham alohida chiziqcha sifatida
+    # qoladi, negativ son sifatida yeb ketilmaydi), aks holda masalan
+    # "-5 daraja" dagi minus belgisi yo'qolib "besh daraja" (issiq) bo'lib
+    # qolardi, "minus besh daraja" (sovuq) o'rniga.
+    text = re.sub(r'(?<!\w)-?\d+\b', lambda m: f" {integer_to_uzbek(int(m.group(0)))} ", text)
     # Satrlar ichidagi probellarni tozalash, lekin yangi qatorlarni (\n) saqlash
     lines = [re.sub(r'[ \t]+', ' ', line).strip() for line in text.split('\n')]
     text = '\n'.join(l for l in lines if l).strip()

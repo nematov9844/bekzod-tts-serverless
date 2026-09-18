@@ -264,11 +264,17 @@ print(f"[✓] Bekzod TTS Engine (3 verified styles: classic/modern/inquisitive) 
 # ─────────────────────────────────────────────────────────────────────────────
 
 def clean_text_strictly_for_vocab(text: str, vocab_char_map: dict, style: str = "adabiy", already_normalized: bool = False) -> str:
+    # Word/PDF/web-copied text often carries invisible Unicode whitespace
+    # (non-breaking space, zero-width joiners, various fixed-width spaces)
+    # that isn't a plain " " -- left alone, the vocab filter below doesn't
+    # recognize it as whitespace and silently fuses adjacent words into one
+    # unpronounceable blob (e.g. "Salom\xa0dunyo" -> "salomdunyo").
+    text = re.sub(r'[\xa0​‌‍﻿ -   　]', ' ', text)
     if not already_normalized:
         norm_text = normalize_uzbek_text(text, style=style).lower()
     else:
         norm_text = text.lower()
-    
+
     # Standalone abbreviations to pronunciation
     norm_text = re.sub(r'\btts\b', 'te te es', norm_text)
     norm_text = re.sub(r'\bai\b', 'ey ay', norm_text)
