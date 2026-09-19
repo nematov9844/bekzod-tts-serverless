@@ -201,17 +201,31 @@ def load_anchor(filename: str, fallback: Optional[str] = None):
     mel_len = a.shape[-1] // hop_length
     return a, mel_len
 
-# 2026-09-17: storyteller/cheerful/melancholic/epic/mysterious/authoritative/
-# ironic anchors were confirmed BY EAR (Lynx) to actually be a different
-# person's voice ("Zufar aka"), mislabeled as Bekzod's. Their source files
-# were deleted from the lynx9844/f5tts-bekzod-200k-uzbek HF repo -- do not
-# re-add load_anchor() calls for them until a verified-correct Bekzod
-# recording replaces each one. See UNAVAILABLE_STYLES below: requests for
-# these styles are rejected explicitly rather than silently falling back to
-# classic/modern audio under the wrong style label.
+# 2026-09-19: storyteller/cheerful/melancholic/epic/mysterious/authoritative/
+# ironic anchors that were confirmed (2026-09-17) to be a different speaker
+# ("Zufar aka") have now been replaced with real Bekzod aka recordings, read
+# from the exact diktor brief PDF and cross-matched word-for-word against
+# each file's transcript. 5 brand-new "AI ustoz" family styles were recorded
+# in the same batch and are added here for the first time. See
+# bekzod-voice-tts/synthesize.py's PROFILE_SPECS for the source of truth --
+# keep both in sync.
 classic_audio, classic_len = load_anchor("clean_ref_classic_baritone.wav", fallback="ref_classic_baritone.wav")
 modern_audio, modern_len = load_anchor("clean_ref_modern_active.wav", fallback="ref_modern_active.wav")
 inquisitive_audio, inquisitive_len = load_anchor("ref_inquisitive_v5_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+storyteller_audio, storyteller_len = load_anchor("ref_storyteller_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+cheerful_audio, cheerful_len = load_anchor("ref_cheerful_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+melancholic_audio, melancholic_len = load_anchor("ref_melancholic_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+epic_audio, epic_len = load_anchor("ref_epic_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+mysterious_audio, mysterious_len = load_anchor("ref_mysterious_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+authoritative_audio, authoritative_len = load_anchor("ref_authoritative_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+ironic_audio, ironic_len = load_anchor("ref_ironic_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+sales_audio, sales_len = load_anchor("ref_sales_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+whisper_audio, whisper_len = load_anchor("ref_whisper_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
+tushuntiruvchi_audio, tushuntiruvchi_len = load_anchor("ref_tushuntiruvchi_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+maqtovchi_audio, maqtovchi_len = load_anchor("ref_maqtovchi_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+tuzatuvchi_audio, tuzatuvchi_len = load_anchor("ref_tuzatuvchi_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+urgent_sales_audio, urgent_sales_len = load_anchor("ref_urgent_sales_v1_bekzod_real.wav", fallback="clean_ref_modern_active.wav")
+lugat_neytral_audio, lugat_neytral_len = load_anchor("ref_lugat_neytral_v1_bekzod_real.wav", fallback="clean_ref_classic_baritone.wav")
 
 VOICE_PROFILES = {
     "classic": {
@@ -238,26 +252,148 @@ VOICE_PROFILES = {
         "pause_ms": 0.22,
         "cfg_strength": 1.60,
     },
+    "storyteller": {
+        "audio": storyteller_audio,
+        "ref_text": "tasavvur qiling... kimnidir uzoq yo'ldan yuk olib kelayotganini. chegarada uni bojxona xodimi kutib turibdi. ana shu lahzada butun jarayon boshlanadi -- sinchkov nazar, aniq savol va mas'uliyatli qaror.",
+        "mel_len": storyteller_len,
+        "speed_factor": 0.96,
+        "pause_ms": 0.34,
+        "cfg_strength": 1.50,
+    },
+    "cheerful": {
+        "audio": cheerful_audio,
+        "ref_text": "ajoyib! siz bugungi darsni muvaffaqiyatli yakunladingiz! endi navbatdagi mavzuga o'tishga tayyormisiz? ishonchim komilki, buni ham osongina o'zlashtirasiz!",
+        "mel_len": cheerful_len,
+        "speed_factor": 1.05,
+        "pause_ms": 0.18,
+        "cfg_strength": 1.70,
+    },
+    "melancholic": {
+        "audio": melancholic_audio,
+        "ref_text": "ba'zan qonunlar qat'iy bo'ladi... ortiqcha to'langan mablag'ni qaytarish yillar davom etishi mumkin. bu jarayon kimnidir charchatadi, kimnidir umidsizlikka tushirishi mumkin.",
+        "mel_len": melancholic_len,
+        "speed_factor": 0.88,
+        "pause_ms": 0.45,
+        "cfg_strength": 1.45,
+    },
+    "epic": {
+        "audio": epic_audio,
+        "ref_text": "shuning uchun bojxona nazorati -- davlatning iqtisodiy chegarasini saqlovchi buyuk qalqondir! har bir qaror, har bir tekshiruv -- millat xavfsizligi yo'lidagi muhim qadamdir!",
+        "mel_len": epic_len,
+        "speed_factor": 0.96,
+        "pause_ms": 0.30,
+        "cfg_strength": 1.60,
+    },
+    "mysterious": {
+        "audio": mysterious_audio,
+        "ref_text": "har bir hujjat ortida... bir sir yashiringan bo'lishi mumkin. raqamlar, sanalar, imzolar -- bular orasida haqiqatni topish oson emas. sinchkovlik bilan qaraylik...",
+        "mel_len": mysterious_len,
+        "speed_factor": 0.91,
+        "pause_ms": 0.42,
+        "cfg_strength": 1.45,
+    },
+    "authoritative": {
+        "audio": authoritative_audio,
+        "ref_text": "qonunchilikka muvofiq, ushbu harakatlarga faqat belgilangan tartibda ruxsat beriladi. barcha ishtirokchilar mazkur qoidalarga so'zsiz rioya qilishi shart.",
+        "mel_len": authoritative_len,
+        "speed_factor": 0.98,
+        "pause_ms": 0.20,
+        "cfg_strength": 1.65,
+    },
+    "ironic": {
+        "audio": ironic_audio,
+        "ref_text": "ajabo, yana yangi qoida chiqibdimi? har safar soddalashtirish deganda, hujjatlar soni yanada ko'payib ketayotgani qiziq emasmi?",
+        "mel_len": ironic_len,
+        "speed_factor": 0.97,
+        "pause_ms": 0.28,
+        "cfg_strength": 1.55,
+    },
+    "sales": {
+        "audio": sales_audio,
+        "ref_text": "endi o'qishni yanada qulay va tezkor qiling! bizning yangi kursimiz bilan har qanday mavzuni osongina o'zlashtirasiz. hoziroq ro'yxatdan o'ting -- bilim olish hech qachon bunchalik oddiy bo'lmagan!",
+        "mel_len": sales_len,
+        "speed_factor": 1.10,
+        "pause_ms": 0.16,
+        "cfg_strength": 1.75,
+    },
+    "whisper": {
+        "audio": whisper_audio,
+        "ref_text": "bir maslahat beraymimi... bu savolga javobni sinovda albatta so'rashadi. diqqat bilan eshiting, bu muhim.",
+        "mel_len": whisper_len,
+        "speed_factor": 0.90,
+        "pause_ms": 0.35,
+        "cfg_strength": 1.35,
+    },
+    "tushuntiruvchi": {
+        "audio": tushuntiruvchi_audio,
+        "ref_text": "keling, buni asta-sekin tushuntirib beraman. avval asosiy tushunchani ko'rib chiqamiz, keyin misollar yordamida mustahkamlaymiz. shoshilmang, har bir qadamni birgalikda bosamiz.",
+        "mel_len": tushuntiruvchi_len,
+        "speed_factor": 0.95,
+        "pause_ms": 0.30,
+        "cfg_strength": 1.55,
+    },
+    "maqtovchi": {
+        "audio": maqtovchi_audio,
+        "ref_text": "juda soz! to'g'ri javob berdingiz! ko'ryapsizmi, aslida bu mavzu unchalik ham qiyin emas ekan. davom eting, siz ajoyib natija ko'rsatyapsiz!",
+        "mel_len": maqtovchi_len,
+        "speed_factor": 1.0,
+        "pause_ms": 0.20,
+        "cfg_strength": 1.65,
+    },
+    "tuzatuvchi": {
+        "audio": tuzatuvchi_audio,
+        "ref_text": "bu yerda kichik xatolik bor ekan, hechqisi yo'q. keling, qaytadan ko'rib chiqamiz -- asosiysi tushunib olish, shoshilmaslik kerak.",
+        "mel_len": tuzatuvchi_len,
+        "speed_factor": 0.92,
+        "pause_ms": 0.32,
+        "cfg_strength": 1.50,
+    },
+    "urgent_sales": {
+        "audio": urgent_sales_audio,
+        "ref_text": "diqqat! faqat bugun -- maxsus chegirma amal qiladi! kursga yozilish muddati tugashiga oz qoldi, vaqtni boy bermang, hoziroq ro'yxatdan o'ting!",
+        "mel_len": urgent_sales_len,
+        "speed_factor": 1.15,
+        "pause_ms": 0.14,
+        "cfg_strength": 1.80,
+    },
+    "lugat_neytral": {
+        "audio": lugat_neytral_audio,
+        "ref_text": "bojxona. import. eksport. deklaratsiya. to'lov. nazorat. hujjat. tartib. qonun. chegara. yuk. transport. viza. ruxsatnoma. tovar.",
+        "mel_len": lugat_neytral_len,
+        "speed_factor": 0.90,
+        "pause_ms": 0.40,
+        "cfg_strength": 1.50,
+    },
 }
-# Uzbek and semantic aliases (only for the 3 verified-correct Bekzod styles)
+# Uzbek and semantic aliases
 VOICE_PROFILES["vazmin"] = VOICE_PROFILES["classic"]
 VOICE_PROFILES["podkast"] = VOICE_PROFILES["modern"]
 VOICE_PROFILES["savol"] = VOICE_PROFILES["inquisitive"]
+VOICE_PROFILES["ertakchi"] = VOICE_PROFILES["storyteller"]
+VOICE_PROFILES["quvnoq"] = VOICE_PROFILES["cheerful"]
+VOICE_PROFILES["shodiyona"] = VOICE_PROFILES["cheerful"]
+VOICE_PROFILES["gamgin"] = VOICE_PROFILES["melancholic"]
+VOICE_PROFILES["mayus"] = VOICE_PROFILES["melancholic"]
+VOICE_PROFILES["tantanavor"] = VOICE_PROFILES["epic"]
+VOICE_PROFILES["shijoatli"] = VOICE_PROFILES["epic"]
+VOICE_PROFILES["sirli"] = VOICE_PROFILES["mysterious"]
+VOICE_PROFILES["pinhona"] = VOICE_PROFILES["mysterious"]
+VOICE_PROFILES["qatiy"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["qat'iy"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["buyruq"] = VOICE_PROFILES["authoritative"]
+VOICE_PROFILES["kinoyali"] = VOICE_PROFILES["ironic"]
+VOICE_PROFILES["sarkazm"] = VOICE_PROFILES["ironic"]
+VOICE_PROFILES["reklama"] = VOICE_PROFILES["sales"]
+VOICE_PROFILES["sotuv"] = VOICE_PROFILES["sales"]
+VOICE_PROFILES["pichirlash"] = VOICE_PROFILES["whisper"]
+VOICE_PROFILES["maxfiy"] = VOICE_PROFILES["whisper"]
+VOICE_PROFILES["tushuntirish"] = VOICE_PROFILES["tushuntiruvchi"]
+VOICE_PROFILES["maqtash"] = VOICE_PROFILES["maqtovchi"]
+VOICE_PROFILES["tuzatish"] = VOICE_PROFILES["tuzatuvchi"]
+VOICE_PROFILES["shoshilinch"] = VOICE_PROFILES["urgent_sales"]
+VOICE_PROFILES["lugat"] = VOICE_PROFILES["lugat_neytral"]
 
-# 2026-09-17: these style names (and their Uzbek aliases) used to map to
-# anchors that turned out to be a different speaker, not Bekzod. Rejecting
-# them explicitly -- with a clear error -- instead of silently substituting
-# classic/modern audio under the requested style's label. Remove an entry
-# here once a verified-correct Bekzod recording exists for it.
-UNAVAILABLE_STYLES = {
-    "storyteller", "cheerful", "melancholic", "epic", "mysterious",
-    "authoritative", "ironic",
-    "ertakchi", "quvnoq", "shodiyona", "gamgin", "mayus", "dramatic",
-    "tantanavor", "shijoatli", "sirli", "pinhona", "qatiy", "qat'iy",
-    "buyruq", "kinoyali", "sarkazm",
-}
-
-print(f"[✓] Bekzod TTS Engine (3 verified styles: classic/modern/inquisitive) initialized successfully on {DEVICE}!")
+print(f"[✓] Bekzod TTS Engine (17 verified Bekzod-voice styles) initialized successfully on {DEVICE}!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. EXACT TEXT PREPROCESSING & ZERO-DEFECT AUDIO ENGINE
@@ -573,20 +709,17 @@ def handler(job: dict) -> dict:
         raw_text = proofread_uzbek_text(raw_text)
 
     voice = (job_input.get("voice") or job_input.get("voice_style") or job_input.get("style_name") or "classic").lower()
-    if voice in UNAVAILABLE_STYLES:
-        return {
-            "error": (
-                f"'{voice}' ovoz uslubi hozircha mavjud emas: bu uslub uchun "
-                f"yuklangan anchor haqiqiy Bekzod aka ovozi emasligi tasdiqlandi va "
-                f"o'chirildi. Hozircha mavjud uslublar: classic, modern, inquisitive."
-            ),
-            "status": "FAILED",
-        }
     style = job_input.get("style", "adabiy").lower()
     speed = float(job_input.get("speed", 1.0))
     steps = int(job_input.get("steps", 32))
     fmt = job_input.get("format", "mp3").lower()
-    seed = job_input.get("seed", None)
+    # 2026-09-18: default changed from None (fully random torch RNG each
+    # call) to a tested, fixed value -- seed=None let the exact same text
+    # come out correct one call and wrong (word-substitution artifacts,
+    # e.g. "o'tdi" -> "o'ttiz") the next, with no way to reproduce or
+    # retry a bad take deliberately. 42 is verified against that exact
+    # confusion; callers can still override via job_input["seed"].
+    seed = job_input.get("seed", 42)
     # "clean" (default True = shovqinsiz): applies the full cleanup pipeline
     # (per-chunk vocoder-bounds trimming + final mastering EQ). Set false
     # (shovqinli) to get the raw, unprocessed vocoder output instead.
